@@ -1,0 +1,31 @@
+@import 'tailwindcss';
+
+@theme inline {
+  --color-border: hsl(0 0% 89.5%);
+  --color-input: hsl(0 0% 89.5%);
+  --color-ring: hsl(0 0% 3.6%);
+  --color-background: hsl(0 0% 100%);
+  --color-foreground: hsl(0 0% 3.6%);
+  --color-primary: hsl(0 0% 9%);
+  --color-primary-foreground: hsl(0 0% 100%);
+  --color-secondary: hsl(0 0% 96.1%);
+  --color-secondary-foreground: hsl(0 0% 9%);
+  --color-destructive: hsl(0 84.2% 60.2%);
+  --color-destructive-foreground: hsl(0 0% 100%);
+  --color-muted: hsl(0 0% 89.5%);
+  --color-muted-foreground: hsl(0 0% 45.1%);
+  --color-accent: hsl(14.3 100% 44.1%);
+  --color-accent-foreground: hsl(0 0% 100%);
+  --color-card: hsl(0 0% 100%);
+  --color-card-foreground: hsl(0 0% 3.6%);
+  --color-popover: hsl(0 0% 100%);
+  --color-popover-foreground: hsl(0 0% 3.6%);
+  --radius: 0.5rem;
+}
+
+@layer base {
+  /* removed @apply border-border to prevent unknown utility error */
+  body {
+    @apply bg-background text-foreground;
+  }
+}
