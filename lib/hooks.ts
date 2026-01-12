@@ -62,7 +62,7 @@ export function useDashboardSummary(dateRange?: { start: Date; end: Date }) {
   ensureDbInitialized();
   const [isLoading] = useState(false);
   return {
-    data: dashboardDb.get(),
+    data: dashboardDb.get() ?? mockDashboardKPI,
     isLoading,
     error: null,
   };
