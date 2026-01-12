@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ChefHatIcon } from '@/components/icons';
+import { loadDemoRestaurant } from '@/lib/db';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -26,6 +27,12 @@ export default function LoginPage() {
   };
 
   const handleDemoMode = () => {
+    // Load demo restaurant into the active database, then navigate
+    try {
+      loadDemoRestaurant();
+    } catch (e) {
+      // ignore
+    }
     router.push('/dashboard');
   };
 

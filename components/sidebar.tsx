@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
+import { useRestaurant } from '@/lib/hooks';
 import { cn } from '@/lib/utils';
 import {
   LayoutDashboardIcon,
@@ -28,6 +29,7 @@ const navItems = [
 export function Sidebar() {
   const [mounted, setMounted] = useState(false);
   const pathname = usePathname();
+  const { data: restaurant } = useRestaurant();
 
   useEffect(() => {
     setMounted(true);
@@ -84,7 +86,7 @@ export function Sidebar() {
       <div className="p-4 border-t border-slate-800">
         <div className="px-4 py-3 bg-slate-800 rounded-lg text-sm">
           <p className="text-slate-400">Signed in as</p>
-          <p className="font-medium text-white">Manila Bites Restaurant</p>
+          <p className="font-medium text-white">{restaurant?.name || 'Your Restaurant'}</p>
         </div>
       </div>
     </aside>

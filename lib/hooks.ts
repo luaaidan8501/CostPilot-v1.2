@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import {
   mockRestaurant,
   mockIngredients,
@@ -12,6 +12,18 @@ import {
   mockAnalyticsData,
   mockDishesOverTarget,
 } from './mock-data';
+import {
+  initializeDatabase,
+  restaurantDb,
+  ingredientDb,
+  purchaseDb,
+  recipeDb,
+  posItemDb,
+  alertDb,
+  analyticsDb,
+  dishesDb,
+  dashboardDb,
+} from './db';
 import type {
   Ingredient,
   Purchase,
@@ -23,20 +35,44 @@ import type {
   AnalyticsDataPoint,
 } from './types';
 
+// Initialize database on first hook call
+let dbInitialized = false;
+
+function ensureDbInitialized() {
+  if (!dbInitialized) {
+    initializeDatabase(
+      mockIngredients,
+      mockPurchases,
+      mockRecipes,
+      mockPosItems,
+      mockRestaurant,
+      mockAlerts,
+      mockDashboardKPI,
+      mockAnalyticsData,
+      mockDishesOverTarget
+    );
+    dbInitialized = true;
+  }
+}
+
 // Mock hooks simulating API calls with TanStack Query structure
+// Now backed by in-memory database that persists during session
+
 export function useDashboardSummary(dateRange?: { start: Date; end: Date }) {
+  ensureDbInitialized();
   const [isLoading] = useState(false);
   return {
-    data: mockDashboardKPI,
+    data: dashboardDb.get(),
     isLoading,
     error: null,
   };
 }
 
 export function useRestaurant() {
+  ensureDbInitialized();
   const [isLoading] = useState(false);
   return {
-    data: mockRestaurant,
+    data: restaurantDb.get(),
     isLoading,
     error: null,
   };
@@ -48,9 +84,11 @@ export function useIngredients(filters?: {
   hasRecentPurchase?: boolean;
   search?: string;
 }) {
+  ensureDbInitialized();
   const [isLoading] = useState(false);
   
-  let filtered = mockIngredients;
+  let filtered = ingredientDb.getAll();
+  
   if (filters?.search) {
     filtered = filtered.filter(i =>
       i.name.toLowerCase().includes(filters.search!.toLowerCase())
@@ -68,8 +106,9 @@ export function useIngredients(filters?: {
 }
 
 export function useIngredientDetails(ingredientId: string) {
+  ensureDbInitialized();
   const [isLoading] = useState(false);
-  const ingredient = mockIngredients.find(i => i.id === ingredientId);
+  const ingredient = ingredientDb.getById(ingredientId);
   return {
     data: ingredient,
     isLoading,
@@ -78,26 +117,29 @@ export function useIngredientDetails(ingredientId: string) {
 }
 
 export function usePurchases(dateRange?: { start: Date; end: Date }) {
+  ensureDbInitialized();
   const [isLoading] = useState(false);
   return {
-    data: mockPurchases,
+    data: purchaseDb.getAll(),
     isLoading,
     error: null,
   };
 }
 
 export function useRecipes() {
+  ensureDbInitialized();
   const [isLoading] = useState(false);
   return {
-    data: mockRecipes,
+    data: recipeDb.getAll(),
     isLoading,
     error: null,
   };
 }
 
 export function useRecipeByPosItem(posItemId: string) {
+  ensureDbInitialized();
   const [isLoading] = useState(false);
-  const recipe = mockRecipes.find(r => r.posItemId === posItemId);
+  const recipe = recipeDb.getByPosItemId(posItemId);
   return {
     data: recipe,
     isLoading,
@@ -106,8 +148,9 @@ export function useRecipeByPosItem(posItemId: string) {
 }
 
 export function usePosItems(filters?: { hasRecipe?: boolean }) {
+  ensureDbInitialized();
   const [isLoading] = useState(false);
-  let data = mockPosItems;
+  let data = posItemDb.getAll();
   if (filters?.hasRecipe !== undefined) {
     data = data.filter(item => item.hasRecipe === filters.hasRecipe);
   }
@@ -119,8 +162,9 @@ export function usePosItems(filters?: { hasRecipe?: boolean }) {
 }
 
 export function useAlerts(filters?: { type?: string; severity?: string; status?: string }) {
+  ensureDbInitialized();
   const [isLoading] = useState(false);
-  let filtered = mockAlerts;
+  let filtered = alertDb.getAll();
   if (filters?.type) {
     filtered = filtered.filter(a => a.type === filters.type);
   }
@@ -138,19 +182,65 @@ export function useAlerts(filters?: { type?: string; severity?: string; status?:
 }
 
 export function useAnalyticsData(dateRange?: { start: Date; end: Date }, groupBy?: string) {
+  ensureDbInitialized();
   const [isLoading] = useState(false);
   return {
-    data: mockAnalyticsData,
+    data: analyticsDb.getAll(),
     isLoading,
     error: null,
   };
 }
 
 export function useDishesOverTarget() {
+  ensureDbInitialized();
   const [isLoading] = useState(false);
   return {
-    data: mockDishesOverTarget,
+    data: dishesDb.getAll(),
     isLoading,
     error: null,
   };
+}
+
+// Data mutation hooks - for saving/updating data
+export function useSaveRestaurant() {
+  ensureDbInitialized();
+  return useCallback((restaurant: Restaurant) => {
+    restaurantDb.set(restaurant);
+    console.log('[useSaveRestaurant] Restaurant saved:', restaurant);
+  }, []);
+}
+
+export function useSavePurchase() {
+  ensureDbInitialized();
+  return useCallback((purchase: Purchase) => {
+    purchaseDb.add(purchase);
+  }, []);
+}
+
+export function useSaveRecipe() {
+  ensureDbInitialized();
+  return useCallback((recipe: Recipe) => {
+    recipeDb.add(recipe);
+  }, []);
+}
+
+export function useUpdateRecipe() {
+  ensureDbInitialized();
+  return useCallback((id: string, recipe: Partial<Recipe>) => {
+    recipeDb.update(id, recipe);
+  }, []);
+}
+
+export function useSavePosItem() {
+  ensureDbInitialized();
+  return useCallback((posItem: PosItem) => {
+    posItemDb.add(posItem);
+  }, []);
+}
+
+export function useSaveIngredient() {
+  ensureDbInitialized();
+  return useCallback((ingredient: Ingredient) => {
+    ingredientDb.add(ingredient);
+  }, []);
 }

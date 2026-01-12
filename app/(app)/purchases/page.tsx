@@ -2,7 +2,7 @@
 
 import type React from "react"
 import { useState, useRef } from "react"
-import { usePurchases } from "@/lib/hooks"
+import { usePurchases, useSavePurchase } from "@/lib/hooks"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -10,14 +10,15 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { CameraIcon, PlusIcon } from "@/components/icons"
+import { CameraIcon, PlusIcon, TrashIcon } from "@/components/icons"
+import type { Purchase } from "@/lib/types"
 
 export default function PurchasesPage() {
-  const [purchaseType, setPurchaseType] = useState<"invoice" | "camera" | "quick" | "manual">("invoice")
+  const [purchaseType, setPurchaseType] = useState<"invoice" | "camera" | "quick" | "manual">("quick")
   const [cameraActive, setCameraActive] = useState(false)
   const [photoCapture, setPhotoCapture] = useState<string | null>(null)
-  const [currentDate] = useState(new Date())
   const { data: purchases } = usePurchases()
+  const savePurchase = useSavePurchase()
 
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -25,15 +26,49 @@ export default function PurchasesPage() {
   const [quickAddForm, setQuickAddForm] = useState({
     ingredient: "",
     quantity: "",
-    unit: "",
+    unit: "kg",
     totalPrice: "",
     supplier: "",
+    date: new Date().toISOString().split("T")[0],
     type: "Regular",
   })
 
   const handleQuickAdd = (e: React.FormEvent) => {
     e.preventDefault()
-    // Handle quick add submission
+    
+    if (!quickAddForm.ingredient || !quickAddForm.quantity || !quickAddForm.totalPrice) {
+      alert("Please fill in all fields")
+      return
+    }
+
+    const newPurchase: Purchase = {
+      id: `purchase_${Date.now()}`,
+      date: new Date(quickAddForm.date),
+      ingredientId: `ing_${Date.now()}`,
+      ingredientName: quickAddForm.ingredient,
+      quantity: parseFloat(quickAddForm.quantity),
+      unit: quickAddForm.unit,
+      totalPrice: parseFloat(quickAddForm.totalPrice),
+      unitPrice: parseFloat(quickAddForm.totalPrice) / parseFloat(quickAddForm.quantity),
+      supplierId: `sup_${Date.now()}`,
+      supplier: quickAddForm.supplier || "Unknown",
+      type: quickAddForm.type as "Regular" | "Emergency",
+    }
+
+    savePurchase(newPurchase)
+
+    // Reset form
+    setQuickAddForm({
+      ingredient: "",
+      quantity: "",
+      unit: "kg",
+      totalPrice: "",
+      supplier: "",
+      date: new Date().toISOString().split("T")[0],
+      type: "Regular",
+    })
+
+    alert("Purchase logged successfully!")
   }
 
   const startCamera = async () => {
@@ -204,20 +239,30 @@ export default function PurchasesPage() {
                     <form onSubmit={handleQuickAdd} className="space-y-4">
                       <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
-                          <Label htmlFor="quick-ingredient">Ingredient</Label>
+                          <Label htmlFor="quick-date">Date</Label>
+                          <Input
+                            id="quick-date"
+                            type="date"
+                            value={quickAddForm.date}
+                            onChange={(e) => setQuickAddForm({ ...quickAddForm, date: e.target.value })}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="quick-ingredient">Ingredient *</Label>
                           <Input
                             id="quick-ingredient"
-                            placeholder="Select ingredient"
+                            placeholder="e.g., Chicken Thigh"
                             value={quickAddForm.ingredient}
                             onChange={(e) => setQuickAddForm({ ...quickAddForm, ingredient: e.target.value })}
                           />
                         </div>
                         <div className="space-y-2">
-                          <Label htmlFor="quick-quantity">Quantity</Label>
+                          <Label htmlFor="quick-quantity">Quantity *</Label>
                           <Input
                             id="quick-quantity"
                             type="number"
                             placeholder="e.g., 5"
+                            step="0.01"
                             value={quickAddForm.quantity}
                             onChange={(e) => setQuickAddForm({ ...quickAddForm, quantity: e.target.value })}
                           />
@@ -229,7 +274,7 @@ export default function PurchasesPage() {
                             onValueChange={(value) => setQuickAddForm({ ...quickAddForm, unit: value })}
                           >
                             <SelectTrigger>
-                              <SelectValue placeholder="Select unit" />
+                              <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
                               <SelectItem value="kg">kg</SelectItem>
@@ -241,11 +286,12 @@ export default function PurchasesPage() {
                           </Select>
                         </div>
                         <div className="space-y-2">
-                          <Label htmlFor="quick-price">Total Price (₱)</Label>
+                          <Label htmlFor="quick-price">Total Price (₱) *</Label>
                           <Input
                             id="quick-price"
                             type="number"
                             placeholder="e.g., 500"
+                            step="0.01"
                             value={quickAddForm.totalPrice}
                             onChange={(e) => setQuickAddForm({ ...quickAddForm, totalPrice: e.target.value })}
                           />
@@ -259,7 +305,7 @@ export default function PurchasesPage() {
                             onChange={(e) => setQuickAddForm({ ...quickAddForm, supplier: e.target.value })}
                           />
                         </div>
-                        <div className="space-y-2">
+                        <div className="col-span-2 space-y-2">
                           <Label htmlFor="quick-type">Type</Label>
                           <Select
                             value={quickAddForm.type}

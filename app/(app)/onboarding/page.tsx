@@ -14,6 +14,8 @@ import {
 } from '@/components/ui/select';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ChefHatIcon, CheckCircle2Icon } from '@/components/icons';
+import { useSaveRestaurant } from '@/lib/hooks';
+import { useToast } from '@/components/ui/use-toast';
 
 const philippineRegions = [
   'NCR',
@@ -47,6 +49,7 @@ const cuisineTypes = [
 
 export default function OnboardingPage() {
   const router = useRouter();
+  const { toast } = useToast();
   const [step, setStep] = useState(1);
   const [formData, setFormData] = useState({
     restaurantName: '',
@@ -74,11 +77,38 @@ export default function OnboardingPage() {
     });
   };
 
+  const saveRestaurant = useSaveRestaurant();
+
   const handleNext = () => {
     if (step < 3) {
       setStep(step + 1);
     } else {
-      router.push('/dashboard');
+      // Save restaurant info to DB
+      const newRestaurant = {
+        id: '1',
+        name: formData.restaurantName,
+        seatingCapacity: parseInt(formData.seatingCapacity),
+        region: formData.region,
+        city: '', // Can be added later
+        cuisine: formData.cuisine,
+        targetFoodCostPercentage: parseInt(formData.targetFoodCost),
+        targetFoodCostRange: {
+          min: parseInt(formData.minFoodCost),
+          max: parseInt(formData.maxFoodCost),
+        },
+        categoryTargets: {},
+        defaultCurrency: 'PHP',
+        timezone: 'Asia/Manila',
+      };
+
+      saveRestaurant(newRestaurant);
+      toast({
+        title: 'Restaurant saved!',
+        description: `${formData.restaurantName} has been saved. Proceeding to menu setup.`,
+      });
+
+      // Redirect to menu setup instead of dashboard
+      router.push('/setup/menu');
     }
   };
 
@@ -100,20 +130,20 @@ export default function OnboardingPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-4">
-      <div className="max-w-2xl mx-auto pt-8">
+      <div className="max-w-2xl mx-auto">
         {/* Header */}
-        <div className="text-center mb-8">
-          <div className="flex items-center justify-center mb-4">
-            <div className="p-3 bg-teal-100 rounded-lg">
-              <ChefHatIcon className="w-8 h-8 text-teal-700" />
+        <div className="text-center mb-4 pt-4">
+          <div className="flex items-center justify-center mb-2">
+            <div className="p-2 bg-teal-100 rounded-lg">
+              <ChefHatIcon className="w-6 h-6 text-teal-700" />
             </div>
           </div>
-          <h1 className="text-3xl font-bold text-slate-900">Welcome to CostPilot</h1>
-          <p className="text-slate-600 mt-2">Let's set up your restaurant</p>
+          <h1 className="text-2xl font-bold text-slate-900">Welcome to CostPilot</h1>
+          <p className="text-slate-600 text-sm">Let's set up your restaurant</p>
         </div>
 
         {/* Progress */}
-        <div className="flex items-center justify-center gap-2 mb-8">
+        <div className="flex items-center justify-center gap-2 mb-4">
           {[1, 2, 3].map((i) => (
             <div key={i} className="flex items-center gap-2">
               <div
@@ -134,35 +164,37 @@ export default function OnboardingPage() {
 
         {/* Step 1: Restaurant Basics */}
         {step === 1 && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Restaurant Basics</CardTitle>
-              <CardDescription>Tell us about your restaurant</CardDescription>
+          <Card className="mb-4">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">Restaurant Basics</CardTitle>
+              <CardDescription className="text-xs">Tell us about your restaurant</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="restaurantName">Restaurant Name</Label>
+            <CardContent className="space-y-2">
+              <div className="space-y-1">
+                <Label htmlFor="restaurantName" className="text-xs">Restaurant Name</Label>
                 <Input
                   id="restaurantName"
                   name="restaurantName"
-                  placeholder="e.g., Manila Bites Restaurant"
+                  placeholder="e.g., Manila Bites"
+                  className="h-8 text-sm"
                   value={formData.restaurantName}
                   onChange={handleChange}
                 />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="seatingCapacity">Seating Capacity</Label>
+              <div className="space-y-1">
+                <Label htmlFor="seatingCapacity" className="text-xs">Seating Capacity</Label>
                 <Input
                   id="seatingCapacity"
                   name="seatingCapacity"
                   type="number"
                   placeholder="e.g., 25"
+                  className="h-8 text-sm"
                   value={formData.seatingCapacity}
                   onChange={handleChange}
                 />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="region">Region</Label>
+              <div className="space-y-1">
+                <Label htmlFor="region" className="text-xs">Region</Label>
                 <Select value={formData.region} onValueChange={(value) => handleSelectChange('region', value)}>
                   <SelectTrigger>
                     <SelectValue placeholder="Select your region" />
@@ -176,11 +208,11 @@ export default function OnboardingPage() {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="cuisine">Primary Cuisine</Label>
+              <div className="space-y-1">
+                <Label htmlFor="cuisine" className="text-xs">Primary Cuisine</Label>
                 <Select value={formData.cuisine} onValueChange={(value) => handleSelectChange('cuisine', value)}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select cuisine type" />
+                  <SelectTrigger className="h-8 text-sm">
+                    <SelectValue placeholder="Select cuisine" />
                   </SelectTrigger>
                   <SelectContent>
                     {cuisineTypes.map((cuisine) => (
@@ -197,45 +229,48 @@ export default function OnboardingPage() {
 
         {/* Step 2: Food Cost Target */}
         {step === 2 && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Food Cost Target</CardTitle>
-              <CardDescription>Set your target food cost percentage</CardDescription>
+          <Card className="mb-4">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">Food Cost Target</CardTitle>
+              <CardDescription className="text-xs">Set your target food cost %</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="bg-teal-50 border border-teal-200 rounded-lg p-4 text-sm text-teal-700">
-                <p>We'll track your dishes against this target range. A typical range is 28–32%.</p>
+            <CardContent className="space-y-2">
+              <div className="bg-teal-50 border border-teal-200 rounded p-2 text-xs text-teal-700">
+                <p>Track dishes against target range (typical: 28–32%).</p>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="targetFoodCost">Target Food Cost %</Label>
+              <div className="space-y-1">
+                <Label htmlFor="targetFoodCost" className="text-xs">Target Food Cost %</Label>
                 <Input
                   id="targetFoodCost"
                   name="targetFoodCost"
                   type="number"
                   placeholder="e.g., 30"
+                  className="h-8 text-sm"
                   value={formData.targetFoodCost}
                   onChange={handleChange}
                 />
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="minFoodCost">Minimum %</Label>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1">
+                  <Label htmlFor="minFoodCost" className="text-xs">Minimum %</Label>
                   <Input
                     id="minFoodCost"
                     name="minFoodCost"
                     type="number"
                     placeholder="e.g., 28"
+                    className="h-8 text-sm"
                     value={formData.minFoodCost}
                     onChange={handleChange}
                   />
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="maxFoodCost">Maximum %</Label>
+                <div className="space-y-1">
+                  <Label htmlFor="maxFoodCost" className="text-xs">Maximum %</Label>
                   <Input
                     id="maxFoodCost"
                     name="maxFoodCost"
                     type="number"
                     placeholder="e.g., 32"
+                    className="h-8 text-sm"
                     value={formData.maxFoodCost}
                     onChange={handleChange}
                   />
@@ -247,19 +282,19 @@ export default function OnboardingPage() {
 
         {/* Step 3: POS Integration */}
         {step === 3 && (
-          <Card>
-            <CardHeader>
-              <CardTitle>POS Integration</CardTitle>
-              <CardDescription>What POS system do you use?</CardDescription>
+          <Card className="mb-4">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">POS Integration</CardTitle>
+              <CardDescription className="text-xs">What POS system do you use?</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm text-blue-700">
-                <p>We'll connect via API/CSV later. For now, we'll generate sample POS data so you can explore CostPilot.</p>
+            <CardContent className="space-y-2">
+              <div className="bg-blue-50 border border-blue-200 rounded p-2 text-xs text-blue-700">
+                <p>We'll connect via API/CSV. For now, explore with sample data.</p>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="posProvider">POS Provider</Label>
+              <div className="space-y-1">
+                <Label htmlFor="posProvider" className="text-xs">POS Provider</Label>
                 <Select value={formData.posProvider} onValueChange={(value) => handleSelectChange('posProvider', value)}>
-                  <SelectTrigger>
+                  <SelectTrigger className="h-8 text-sm">
                     <SelectValue placeholder="Select your POS" />
                   </SelectTrigger>
                   <SelectContent>
@@ -276,19 +311,19 @@ export default function OnboardingPage() {
         )}
 
         {/* Buttons */}
-        <div className="flex gap-3 mt-6">
+        <div className="flex gap-3">
           <Button
             variant="outline"
             onClick={handlePrev}
             disabled={step === 1}
-            className="w-full"
+            className="w-1/2 h-9 text-sm"
           >
             Previous
           </Button>
           <Button
             onClick={handleNext}
             disabled={!isStepValid()}
-            className="w-full bg-teal-600 hover:bg-teal-700"
+            className="w-1/2 h-9 text-sm bg-teal-600 hover:bg-teal-700"
           >
             {step === 3 ? 'Finish Setup' : 'Next'}
           </Button>
