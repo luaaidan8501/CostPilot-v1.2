@@ -35,8 +35,9 @@ export interface RecipeIngredient {
   ingredientName: string;
   quantityPerPortion: number;
   unit: string;
-  unitCost: number;
-  costPerPortion: number;
+  totalCost: number; // Total cost for the quantity (e.g., 30 pesos for 200g)
+  costPerUnit: number; // Calculated cost per unit (e.g., 0.15 pesos/g)
+  costPerPortion: number; // Total cost for this ingredient in the recipe
 }
 
 export interface Recipe {

@@ -165,7 +165,8 @@ export const mockRecipes: Recipe[] = [
         ingredientName: "Pork Belly",
         quantityPerPortion: 0.15,
         unit: "kg",
-        unitCost: 220,
+        totalCost: 33, // 0.15kg costs 33 pesos total
+        costPerUnit: 220, // 33 / 0.15 = 220 pesos/kg
         costPerPortion: 33,
       },
       {
@@ -173,7 +174,8 @@ export const mockRecipes: Recipe[] = [
         ingredientName: "Onion",
         quantityPerPortion: 0.05,
         unit: "kg",
-        unitCost: 35,
+        totalCost: 1.75,
+        costPerUnit: 35,
         costPerPortion: 1.75,
       },
       {
@@ -181,7 +183,8 @@ export const mockRecipes: Recipe[] = [
         ingredientName: "Garlic",
         quantityPerPortion: 0.02,
         unit: "kg",
-        unitCost: 250,
+        totalCost: 5,
+        costPerUnit: 250,
         costPerPortion: 5,
       },
       {
@@ -189,7 +192,8 @@ export const mockRecipes: Recipe[] = [
         ingredientName: "Rice",
         quantityPerPortion: 0.15,
         unit: "kg",
-        unitCost: 52,
+        totalCost: 7.8,
+        costPerUnit: 52,
         costPerPortion: 7.8,
       },
     ],
@@ -207,7 +211,8 @@ export const mockRecipes: Recipe[] = [
         ingredientName: "Chicken Thigh",
         quantityPerPortion: 0.2,
         unit: "kg",
-        unitCost: 180,
+        totalCost: 36,
+        costPerUnit: 180,
         costPerPortion: 36,
       },
       {
@@ -215,7 +220,8 @@ export const mockRecipes: Recipe[] = [
         ingredientName: "Tomato",
         quantityPerPortion: 0.08,
         unit: "kg",
-        unitCost: 45,
+        totalCost: 3.6,
+        costPerUnit: 45,
         costPerPortion: 3.6,
       },
       {
@@ -223,7 +229,8 @@ export const mockRecipes: Recipe[] = [
         ingredientName: "Onion",
         quantityPerPortion: 0.05,
         unit: "kg",
-        unitCost: 35,
+        totalCost: 1.75,
+        costPerUnit: 35,
         costPerPortion: 1.75,
       },
       {
@@ -231,7 +238,8 @@ export const mockRecipes: Recipe[] = [
         ingredientName: "Rice",
         quantityPerPortion: 0.15,
         unit: "kg",
-        unitCost: 52,
+        totalCost: 7.8,
+        costPerUnit: 52,
         costPerPortion: 7.8,
       },
     ],

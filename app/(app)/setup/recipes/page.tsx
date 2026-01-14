@@ -26,7 +26,7 @@ export default function RecipesSetupPage() {
       ingredientName: '',
       quantityPerPortion: '',
       unit: 'kg',
-      unitCost: '',
+      totalCost: '', // Total cost for the entire quantity
     },
   });
 
@@ -45,7 +45,7 @@ export default function RecipesSetupPage() {
           ingredientName: '',
           quantityPerPortion: '',
           unit: 'kg',
-          unitCost: '',
+          totalCost: '',
         },
       });
     } else {
@@ -56,26 +56,31 @@ export default function RecipesSetupPage() {
           ingredientName: '',
           quantityPerPortion: '',
           unit: 'kg',
-          unitCost: '',
+          totalCost: '',
         },
       });
     }
   };
 
   const handleAddIngredient = () => {
-    const { ingredientName, quantityPerPortion, unit, unitCost } = formData.newIngredient;
-    if (!ingredientName || !quantityPerPortion || !unitCost) {
+    const { ingredientName, quantityPerPortion, unit, totalCost } = formData.newIngredient;
+    if (!ingredientName || !quantityPerPortion || !totalCost) {
       alert('Please fill in all ingredient fields');
       return;
     }
 
+    const qty = parseFloat(quantityPerPortion);
+    const cost = parseFloat(totalCost);
+    const costPerUnit = cost / qty; // e.g., 30 pesos / 200g = 0.15 pesos/g
+
     const newIngredient: RecipeIngredient = {
       ingredientId: `ingredient-${Date.now()}`,
       ingredientName,
-      quantityPerPortion: parseFloat(quantityPerPortion),
+      quantityPerPortion: qty,
       unit,
-      unitCost: parseFloat(unitCost),
-      costPerPortion: parseFloat(quantityPerPortion) * parseFloat(unitCost),
+      totalCost: cost,
+      costPerUnit,
+      costPerPortion: cost,
     };
 
     setFormData({
@@ -85,7 +90,7 @@ export default function RecipesSetupPage() {
         ingredientName: '',
         quantityPerPortion: '',
         unit: 'kg',
-        unitCost: '',
+        totalCost: '',
       },
     });
   };
@@ -125,20 +130,18 @@ export default function RecipesSetupPage() {
     }
 
     alert('Recipe saved!');
-    setFormData({
-      sellingPrice: '',
-      ingredients: [],
-      newIngredient: {
-        ingredientName: '',
-        quantityPerPortion: '',
-        unit: 'kg',
-        unitCost: '',
-      },
-    });
+      setFormData({
+        sellingPrice: '',
+        ingredients: [],
+        newIngredient: {
+          ingredientName: '',
+          quantityPerPortion: '',
+          unit: 'kg',
+          totalCost: '',
+        },
+      });
     setSelectedItemId(null);
-  };
-
-  const unmappedItems = posItems.filter(item => !recipes.find(r => r.posItemId === item.id));
+  };  const unmappedItems = posItems.filter(item => !recipes.find(r => r.posItemId === item.id));
   const mappedCount = recipes.filter(r => posItems.find(p => p.id === r.posItemId)).length;
 
   return (
@@ -250,7 +253,8 @@ export default function RecipesSetupPage() {
                           <TableRow>
                             <TableHead className="text-xs">Name</TableHead>
                             <TableHead className="text-right text-xs">Qty</TableHead>
-                            <TableHead className="text-right text-xs">Cost/portion</TableHead>
+                            <TableHead className="text-right text-xs">Cost/Unit</TableHead>
+                            <TableHead className="text-right text-xs">Total Cost</TableHead>
                             <TableHead className="w-8"></TableHead>
                           </TableRow>
                         </TableHeader>
@@ -259,6 +263,7 @@ export default function RecipesSetupPage() {
                             <TableRow key={idx}>
                               <TableCell className="text-sm font-medium">{ing.ingredientName}</TableCell>
                               <TableCell className="text-right text-sm">{ing.quantityPerPortion} {ing.unit}</TableCell>
+                              <TableCell className="text-right text-sm">₱{ing.costPerUnit.toFixed(2)}/{ing.unit}</TableCell>
                               <TableCell className="text-right text-sm">₱{ing.costPerPortion.toFixed(2)}</TableCell>
                               <TableCell>
                                 <button onClick={() => handleRemoveIngredient(idx)} className="text-red-600 hover:text-red-700">
@@ -317,15 +322,15 @@ export default function RecipesSetupPage() {
                         <option value="pc">pc</option>
                       </select>
                       <Input
-                        placeholder="Cost"
+                        placeholder="Total Cost"
                         type="number"
                         step="0.01"
                         className="h-8 text-xs"
-                        value={formData.newIngredient.unitCost}
+                        value={formData.newIngredient.totalCost}
                         onChange={(e) =>
                           setFormData({
                             ...formData,
-                            newIngredient: { ...formData.newIngredient, unitCost: e.target.value },
+                            newIngredient: { ...formData.newIngredient, totalCost: e.target.value },
                           })
                         }
                       />
