@@ -36,6 +36,7 @@ export default function RecipesSetupPage() {
   const handleSelectItem = (itemId: string) => {
     setSelectedItemId(itemId);
     const recipe = recipes.find(r => r.posItemId === itemId);
+    const item = posItems.find(p => p.id === itemId);
     
     if (recipe) {
       setFormData({
@@ -50,7 +51,7 @@ export default function RecipesSetupPage() {
       });
     } else {
       setFormData({
-        sellingPrice: selectedItem?.sellingPrice.toString() || '',
+        sellingPrice: item?.sellingPrice.toString() || '',
         ingredients: [],
         newIngredient: {
           ingredientName: '',
@@ -130,19 +131,22 @@ export default function RecipesSetupPage() {
     }
 
     alert('Recipe saved!');
-      setFormData({
-        sellingPrice: '',
-        ingredients: [],
-        newIngredient: {
-          ingredientName: '',
-          quantityPerPortion: '',
-          unit: 'kg',
-          totalCost: '',
-        },
-      });
+    setFormData({
+      sellingPrice: '',
+      ingredients: [],
+      newIngredient: {
+        ingredientName: '',
+        quantityPerPortion: '',
+        unit: 'kg',
+        totalCost: '',
+      },
+    });
     setSelectedItemId(null);
-  };  const unmappedItems = posItems.filter(item => !recipes.find(r => r.posItemId === item.id));
+  };
+
+  const unmappedItems = posItems.filter(item => !recipes.find(r => r.posItemId === item.id));
   const mappedCount = recipes.filter(r => posItems.find(p => p.id === r.posItemId)).length;
+  const progressPercent = posItems.length === 0 ? 0 : (mappedCount / posItems.length) * 100;
 
   return (
     <div className="p-6 space-y-6 max-w-5xl mx-auto">
@@ -159,7 +163,7 @@ export default function RecipesSetupPage() {
         <div className="w-full bg-teal-200 rounded-full h-2 mt-2">
           <div 
             className="bg-teal-600 h-2 rounded-full transition-all"
-            style={{ width: `${(mappedCount / posItems.length) * 100}%` }}
+            style={{ width: `${progressPercent}%` }}
           />
         </div>
       </div>

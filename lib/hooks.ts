@@ -1,16 +1,27 @@
 'use client';
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import {
   mockRestaurant,
   mockIngredients,
   mockPurchases,
   mockRecipes,
   mockPosItems,
+  mockSalesRecords,
   mockAlerts,
   mockDashboardKPI,
   mockAnalyticsData,
   mockDishesOverTarget,
+  seedRestaurant,
+  seedIngredients,
+  seedPurchases,
+  seedRecipes,
+  seedPosItems,
+  seedSalesRecords,
+  seedAlerts,
+  seedDashboardKPI,
+  seedAnalyticsData,
+  seedDishesOverTarget,
 } from './mock-data';
 import {
   initializeDatabase,
@@ -19,10 +30,14 @@ import {
   purchaseDb,
   recipeDb,
   posItemDb,
+  salesDb,
   alertDb,
   analyticsDb,
   dishesDb,
   dashboardDb,
+  setSeedData,
+  loadSeedRestaurant,
+  subscribeToSales,
 } from './db';
 import type {
   Ingredient,
@@ -33,6 +48,7 @@ import type {
   DashboardKPI,
   Restaurant,
   AnalyticsDataPoint,
+  SalesRecord,
 } from './types';
 
 // Initialize database on first hook call
@@ -46,11 +62,25 @@ function ensureDbInitialized() {
       mockRecipes,
       mockPosItems,
       mockRestaurant,
+      mockSalesRecords,
       mockAlerts,
       mockDashboardKPI,
       mockAnalyticsData,
       mockDishesOverTarget
     );
+    setSeedData(
+      seedIngredients,
+      seedPurchases,
+      seedRecipes,
+      seedPosItems,
+      seedRestaurant,
+      seedSalesRecords,
+      seedAlerts,
+      seedDashboardKPI,
+      seedAnalyticsData,
+      seedDishesOverTarget
+    );
+    loadSeedRestaurant();
     dbInitialized = true;
   }
 }
@@ -161,6 +191,36 @@ export function usePosItems(filters?: { hasRecipe?: boolean }) {
   };
 }
 
+export function useSalesRecords(dateRange?: { start: Date; end: Date }) {
+  ensureDbInitialized();
+  const [isLoading] = useState(false);
+  const [allRecords, setAllRecords] = useState(() => salesDb.getAll());
+
+  useEffect(() => {
+    const update = () => setAllRecords(salesDb.getAll());
+    update();
+    return subscribeToSales(update);
+  }, []);
+
+  const filtered = useMemo(() => {
+    if (!dateRange) return allRecords;
+    return allRecords.filter((record) => record.date >= dateRange.start && record.date <= dateRange.end);
+  }, [allRecords, dateRange]);
+
+  return {
+    data: filtered,
+    isLoading,
+    error: null,
+  };
+}
+
+export function useSetSalesRecords() {
+  ensureDbInitialized();
+  return useCallback((records: SalesRecord[]) => {
+    salesDb.set(records);
+  }, []);
+}
+
 export function useAlerts(filters?: { type?: string; severity?: string; status?: string }) {
   ensureDbInitialized();
   const [isLoading] = useState(false);
@@ -235,6 +295,13 @@ export function useSavePosItem() {
   ensureDbInitialized();
   return useCallback((posItem: PosItem) => {
     posItemDb.add(posItem);
+  }, []);
+}
+
+export function useUpdatePosItem() {
+  ensureDbInitialized();
+  return useCallback((id: string, posItem: Partial<PosItem>) => {
+    posItemDb.update(id, posItem);
   }, []);
 }
 

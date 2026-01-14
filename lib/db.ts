@@ -11,15 +11,24 @@ import type {
   Alert,
   DashboardKPI,
   AnalyticsDataPoint,
+  SalesRecord,
 } from './types';
+
+const salesListeners = new Set<() => void>();
+
+function notifySalesListeners() {
+  salesListeners.forEach((listener) => listener());
+}
 
 interface DatabaseState {
   restaurant: Restaurant | null;
   demoRestaurant?: Restaurant | null;
+  seedRestaurant?: Restaurant | null;
   ingredients: Map<string, Ingredient>;
   purchases: Map<string, Purchase>;
   recipes: Map<string, Recipe>;
   posItems: Map<string, PosItem>;
+  salesRecords: SalesRecord[];
   alerts: Map<string, Alert>;
   dashboardKPI: DashboardKPI | null;
   analyticsData: AnalyticsDataPoint[];
@@ -30,10 +39,12 @@ interface DatabaseState {
 let db: DatabaseState = {
   restaurant: null,
   demoRestaurant: null,
+  seedRestaurant: null,
   ingredients: new Map(),
   purchases: new Map(),
   recipes: new Map(),
   posItems: new Map(),
+  salesRecords: [],
   alerts: new Map(),
   dashboardKPI: null,
   analyticsData: [],
@@ -49,6 +60,7 @@ export function initializeDatabase(
   mockRecipes: Recipe[],
   mockPosItems: PosItem[],
   mockRestaurant: Restaurant,
+  mockSalesRecords: SalesRecord[],
   mockAlerts: Alert[],
   mockDashboardKPI: DashboardKPI,
   mockAnalyticsData: AnalyticsDataPoint[],
@@ -62,6 +74,7 @@ export function initializeDatabase(
   (db as any).demoPurchases = mockPurchases;
   (db as any).demoRecipes = mockRecipes;
   (db as any).demoPosItems = mockPosItems;
+  (db as any).demoSalesRecords = mockSalesRecords;
   (db as any).demoAlerts = mockAlerts;
   (db as any).demoDashboardKPI = mockDashboardKPI;
   (db as any).demoAnalyticsData = mockAnalyticsData;
@@ -70,6 +83,30 @@ export function initializeDatabase(
   // Do NOT populate the active maps with demo data by default.
   // The demo data will be loaded explicitly by calling `loadDemoRestaurant()`.
   initialized = true;
+}
+
+export function setSeedData(
+  seedIngredients: Ingredient[],
+  seedPurchases: Purchase[],
+  seedRecipes: Recipe[],
+  seedPosItems: PosItem[],
+  seedRestaurant: Restaurant,
+  seedSalesRecords: SalesRecord[],
+  seedAlerts: Alert[],
+  seedDashboardKPI: DashboardKPI,
+  seedAnalyticsData: AnalyticsDataPoint[],
+  seedDishesOverTarget: any[]
+) {
+  db.seedRestaurant = seedRestaurant;
+  (db as any).seedIngredients = seedIngredients;
+  (db as any).seedPurchases = seedPurchases;
+  (db as any).seedRecipes = seedRecipes;
+  (db as any).seedPosItems = seedPosItems;
+  (db as any).seedSalesRecords = seedSalesRecords;
+  (db as any).seedAlerts = seedAlerts;
+  (db as any).seedDashboardKPI = seedDashboardKPI;
+  (db as any).seedAnalyticsData = seedAnalyticsData;
+  (db as any).seedDishesOverTarget = seedDishesOverTarget;
 }
 
 // Load demo restaurant as the active restaurant (for demo mode)
@@ -94,6 +131,9 @@ export function loadDemoRestaurant() {
   if ((db as any).demoAlerts && db.alerts.size === 0) {
     (db as any).demoAlerts.forEach((a: Alert) => db.alerts.set(a.id, a));
   }
+  if ((db as any).demoSalesRecords && db.salesRecords.length === 0) {
+    db.salesRecords = (db as any).demoSalesRecords;
+  }
   if ((db as any).demoDashboardKPI && !db.dashboardKPI) {
     db.dashboardKPI = (db as any).demoDashboardKPI;
   }
@@ -102,6 +142,42 @@ export function loadDemoRestaurant() {
   }
   if ((db as any).demoDishesOverTarget && db.dishesOverTarget.length === 0) {
     db.dishesOverTarget = (db as any).demoDishesOverTarget;
+  }
+
+  return db.restaurant;
+}
+
+// Load seeded restaurant as the active restaurant (for onboarding-ready demo)
+export function loadSeedRestaurant() {
+  if (!db.seedRestaurant) return null;
+  db.restaurant = db.seedRestaurant;
+
+  if ((db as any).seedPosItems && db.posItems.size === 0) {
+    (db as any).seedPosItems.forEach((item: PosItem) => db.posItems.set(item.id, item));
+  }
+  if ((db as any).seedRecipes && db.recipes.size === 0) {
+    (db as any).seedRecipes.forEach((r: Recipe) => db.recipes.set(r.id, r));
+  }
+  if ((db as any).seedIngredients && db.ingredients.size === 0) {
+    (db as any).seedIngredients.forEach((ing: Ingredient) => db.ingredients.set(ing.id, ing));
+  }
+  if ((db as any).seedPurchases && db.purchases.size === 0) {
+    (db as any).seedPurchases.forEach((p: Purchase) => db.purchases.set(p.id, p));
+  }
+  if ((db as any).seedAlerts && db.alerts.size === 0) {
+    (db as any).seedAlerts.forEach((a: Alert) => db.alerts.set(a.id, a));
+  }
+  if ((db as any).seedSalesRecords && db.salesRecords.length === 0) {
+    db.salesRecords = (db as any).seedSalesRecords;
+  }
+  if ((db as any).seedDashboardKPI && !db.dashboardKPI) {
+    db.dashboardKPI = (db as any).seedDashboardKPI;
+  }
+  if ((db as any).seedAnalyticsData && db.analyticsData.length === 0) {
+    db.analyticsData = (db as any).seedAnalyticsData;
+  }
+  if ((db as any).seedDishesOverTarget && db.dishesOverTarget.length === 0) {
+    db.dishesOverTarget = (db as any).seedDishesOverTarget;
   }
 
   return db.restaurant;
@@ -211,6 +287,20 @@ export const posItemDb = {
   },
 };
 
+// Sales records
+export const salesDb = {
+  getAll: () => db.salesRecords,
+  set: (records: SalesRecord[]) => {
+    db.salesRecords = records;
+    notifySalesListeners();
+  },
+};
+
+export function subscribeToSales(listener: () => void) {
+  salesListeners.add(listener);
+  return () => salesListeners.delete(listener);
+}
+
 // Alert operations
 export const alertDb = {
   getAll: () => Array.from(db.alerts.values()),
@@ -260,10 +350,12 @@ export function clearDatabase() {
   db = {
     restaurant: null,
     demoRestaurant: null,
+    seedRestaurant: null,
     ingredients: new Map(),
     purchases: new Map(),
     recipes: new Map(),
     posItems: new Map(),
+    salesRecords: [],
     alerts: new Map(),
     dashboardKPI: null,
     analyticsData: [],

@@ -1,7 +1,7 @@
 "use client"
 
-import { useState } from "react"
-import { usePosItems, useRecipeByPosItem, useSaveRecipe, useUpdateRecipe } from "@/lib/hooks"
+import { useEffect, useRef, useState } from "react"
+import { usePosItems, useRecipeByPosItem, useSaveRecipe, useUpdateRecipe, useUpdatePosItem } from "@/lib/hooks"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -20,6 +20,7 @@ export default function RecipesPosPage() {
   const { data: recipe } = useRecipeByPosItem(selectedPosItemId || "")
   const saveRecipe = useSaveRecipe()
   const updateRecipe = useUpdateRecipe()
+  const updatePosItem = useUpdatePosItem()
 
   // Form state for creating/editing recipes
   const [formData, setFormData] = useState<{
@@ -32,8 +33,8 @@ export default function RecipesPosPage() {
       unitCost: string
     }
   }>({
-    sellingPrice: recipe?.sellingPrice.toString() || "",
-    ingredients: recipe?.ingredients || [],
+    sellingPrice: "",
+    ingredients: [],
     newIngredient: {
       ingredientName: "",
       quantityPerPortion: "",
@@ -41,6 +42,42 @@ export default function RecipesPosPage() {
       unitCost: "",
     },
   })
+
+  const posItemsRef = useRef(posItems)
+
+  useEffect(() => {
+    posItemsRef.current = posItems
+  }, [posItems])
+
+  useEffect(() => {
+    if (!selectedPosItemId) {
+      setFormData({
+        sellingPrice: "",
+        ingredients: [],
+        newIngredient: {
+          ingredientName: "",
+          quantityPerPortion: "",
+          unit: "kg",
+          unitCost: "",
+        },
+      })
+      return
+    }
+
+    const selectedItem = posItemsRef.current.find((item) => item.id === selectedPosItemId)
+    setFormData({
+      sellingPrice: recipe?.sellingPrice.toString() || selectedItem?.sellingPrice.toString() || "",
+      ingredients: recipe?.ingredients || [],
+      newIngredient: {
+        ingredientName: "",
+        quantityPerPortion: "",
+        unit: "kg",
+        unitCost: "",
+      },
+    })
+    setEditMode(false)
+    setShowCreateForm(false)
+  }, [recipe, selectedPosItemId])
 
   const filteredItems = posItems.filter((item) =>
     item.name.toLowerCase().includes(searchTerm.toLowerCase())
@@ -53,12 +90,16 @@ export default function RecipesPosPage() {
     const { ingredientName, quantityPerPortion, unit, unitCost } = formData.newIngredient
     if (!ingredientName || !quantityPerPortion || !unitCost) return
 
+    const qty = parseFloat(quantityPerPortion)
+    const costPerUnit = parseFloat(unitCost)
     const newIngredient: RecipeIngredient = {
+      ingredientId: `ingredient_${Date.now()}`,
       ingredientName,
-      quantityPerPortion: parseFloat(quantityPerPortion),
+      quantityPerPortion: qty,
       unit,
-      unitCost: parseFloat(unitCost),
-      costPerPortion: parseFloat(quantityPerPortion) * parseFloat(unitCost),
+      totalCost: qty * costPerUnit,
+      costPerUnit,
+      costPerPortion: qty * costPerUnit,
     }
 
     setFormData({
@@ -110,6 +151,7 @@ export default function RecipesPosPage() {
       saveRecipe(newRecipe)
     }
 
+    updatePosItem(selectedPosItemId, { hasRecipe: true })
     setEditMode(false)
     setShowCreateForm(false)
   }
@@ -234,7 +276,7 @@ export default function RecipesPosPage() {
                             <TableCell className="text-right">
                               {ingredient.quantityPerPortion} {ingredient.unit}
                             </TableCell>
-                            <TableCell className="text-right">₱ {ingredient.unitCost}</TableCell>
+                            <TableCell className="text-right">₱ {ingredient.costPerUnit}</TableCell>
                             <TableCell className="text-right">₱ {ingredient.costPerPortion.toFixed(2)}</TableCell>
                             <TableCell className="text-right">
                               {((ingredient.costPerPortion / recipe.totalPlateCost) * 100).toFixed(1)}%
@@ -299,7 +341,7 @@ export default function RecipesPosPage() {
                               <TableCell className="font-medium">{ing.ingredientName}</TableCell>
                               <TableCell className="text-right">{ing.quantityPerPortion}</TableCell>
                               <TableCell className="text-right">{ing.unit}</TableCell>
-                              <TableCell className="text-right">₱ {ing.unitCost}</TableCell>
+                              <TableCell className="text-right">₱ {ing.costPerUnit}</TableCell>
                               <TableCell className="text-center">
                                 <button
                                   onClick={() => handleRemoveIngredient(idx)}

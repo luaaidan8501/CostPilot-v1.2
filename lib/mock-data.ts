@@ -1,4 +1,4 @@
-import type { Ingredient, Purchase, Recipe, PosItem, Alert, DashboardKPI, Restaurant } from "./types"
+import type { Ingredient, Purchase, Recipe, PosItem, Alert, DashboardKPI, Restaurant, SalesRecord } from "./types"
 
 export const mockRestaurant: Restaurant = {
   id: "1",
@@ -17,6 +17,7 @@ export const mockRestaurant: Restaurant = {
   },
   defaultCurrency: "PHP",
   timezone: "Asia/Manila",
+  posProvider: "toast",
 }
 
 export const mockIngredients: Ingredient[] = [
@@ -248,6 +249,272 @@ export const mockRecipes: Recipe[] = [
   },
 ]
 
+export const mockSalesRecords: SalesRecord[] = [
+  {
+    id: "sale_1",
+    posItemId: "1",
+    posItemName: "Pork Sisig Rice Bowl",
+    date: new Date("2025-11-12"),
+    quantity: 32,
+  },
+  {
+    id: "sale_2",
+    posItemId: "2",
+    posItemName: "Chicken Adobo Plate",
+    date: new Date("2025-11-12"),
+    quantity: 28,
+  },
+  {
+    id: "sale_3",
+    posItemId: "4",
+    posItemName: "Iced Tea",
+    date: new Date("2025-11-12"),
+    quantity: 90,
+  },
+]
+
+export const seedRestaurant: Restaurant = {
+  id: "mcd_1",
+  name: "MCDO",
+  seatingCapacity: 60,
+  region: "NCR",
+  city: "Manila",
+  cuisine: "Fast Casual",
+  targetFoodCostPercentage: 30,
+  targetFoodCostRange: { min: 28, max: 32 },
+  categoryTargets: {
+    Mains: 30,
+    Drinks: 18,
+    Desserts: 22,
+    Sides: 28,
+  },
+  defaultCurrency: "PHP",
+  timezone: "Asia/Manila",
+  posProvider: "square",
+}
+
+export const seedIngredients: Ingredient[] = [
+  ...mockIngredients,
+  {
+    id: "9",
+    name: "Potato",
+    category: "Veg",
+    unit: "kg",
+    lastPurchasePrice: 60,
+    benchmarkPrice: 58,
+    lastPurchasedDate: new Date("2025-11-10"),
+    priceTrend: [55, 56, 56, 57, 58, 59, 60, 60, 60, 60],
+  },
+  {
+    id: "10",
+    name: "Tea Concentrate",
+    category: "Beverages",
+    unit: "L",
+    lastPurchasePrice: 120,
+    benchmarkPrice: 115,
+    lastPurchasedDate: new Date("2025-11-11"),
+    priceTrend: [110, 112, 112, 113, 114, 115, 118, 120, 120, 120],
+  },
+  {
+    id: "11",
+    name: "Sugar",
+    category: "Dry Goods",
+    unit: "kg",
+    lastPurchasePrice: 70,
+    benchmarkPrice: 68,
+    lastPurchasedDate: new Date("2025-11-12"),
+    priceTrend: [65, 66, 66, 67, 68, 69, 70, 70, 70, 70],
+  },
+]
+
+export const seedPosItems: PosItem[] = [
+  { id: "m1", name: "Chicken Burger", category: "Mains", sellingPrice: 120, hasRecipe: true },
+  { id: "m2", name: "Spaghetti Bowl", category: "Mains", sellingPrice: 95, hasRecipe: true },
+  { id: "m3", name: "Fries", category: "Sides", sellingPrice: 55, hasRecipe: true },
+  { id: "m4", name: "Iced Tea", category: "Drinks", sellingPrice: 35, hasRecipe: true },
+]
+
+export const seedRecipes: Recipe[] = [
+  {
+    id: "r1",
+    posItemId: "m1",
+    posItemName: "Chicken Burger",
+    sellingPrice: 120,
+    ingredients: [
+      {
+        ingredientId: "1",
+        ingredientName: "Chicken Thigh",
+        quantityPerPortion: 0.2,
+        unit: "kg",
+        totalCost: 36,
+        costPerUnit: 180,
+        costPerPortion: 36,
+      },
+      {
+        ingredientId: "5",
+        ingredientName: "Garlic",
+        quantityPerPortion: 0.01,
+        unit: "kg",
+        totalCost: 2.5,
+        costPerUnit: 250,
+        costPerPortion: 2.5,
+      },
+      {
+        ingredientId: "7",
+        ingredientName: "Cooking Oil",
+        quantityPerPortion: 0.02,
+        unit: "L",
+        totalCost: 1.7,
+        costPerUnit: 85,
+        costPerPortion: 1.7,
+      },
+    ],
+    totalPlateCost: 40.2,
+    foodCostPercentage: 34,
+  },
+  {
+    id: "r2",
+    posItemId: "m2",
+    posItemName: "Spaghetti Bowl",
+    sellingPrice: 95,
+    ingredients: [
+      {
+        ingredientId: "3",
+        ingredientName: "Tomato",
+        quantityPerPortion: 0.2,
+        unit: "kg",
+        totalCost: 9,
+        costPerUnit: 45,
+        costPerPortion: 9,
+      },
+      {
+        ingredientId: "4",
+        ingredientName: "Onion",
+        quantityPerPortion: 0.05,
+        unit: "kg",
+        totalCost: 1.75,
+        costPerUnit: 35,
+        costPerPortion: 1.75,
+      },
+      {
+        ingredientId: "5",
+        ingredientName: "Garlic",
+        quantityPerPortion: 0.02,
+        unit: "kg",
+        totalCost: 5,
+        costPerUnit: 250,
+        costPerPortion: 5,
+      },
+      {
+        ingredientId: "7",
+        ingredientName: "Cooking Oil",
+        quantityPerPortion: 0.01,
+        unit: "L",
+        totalCost: 0.85,
+        costPerUnit: 85,
+        costPerPortion: 0.85,
+      },
+    ],
+    totalPlateCost: 16.6,
+    foodCostPercentage: 17,
+  },
+  {
+    id: "r3",
+    posItemId: "m3",
+    posItemName: "Fries",
+    sellingPrice: 55,
+    ingredients: [
+      {
+        ingredientId: "9",
+        ingredientName: "Potato",
+        quantityPerPortion: 0.25,
+        unit: "kg",
+        totalCost: 15,
+        costPerUnit: 60,
+        costPerPortion: 15,
+      },
+      {
+        ingredientId: "7",
+        ingredientName: "Cooking Oil",
+        quantityPerPortion: 0.03,
+        unit: "L",
+        totalCost: 2.55,
+        costPerUnit: 85,
+        costPerPortion: 2.55,
+      },
+      {
+        ingredientId: "8",
+        ingredientName: "Salt",
+        quantityPerPortion: 0.01,
+        unit: "kg",
+        totalCost: 0.25,
+        costPerUnit: 25,
+        costPerPortion: 0.25,
+      },
+    ],
+    totalPlateCost: 17.8,
+    foodCostPercentage: 32,
+  },
+  {
+    id: "r4",
+    posItemId: "m4",
+    posItemName: "Iced Tea",
+    sellingPrice: 35,
+    ingredients: [
+      {
+        ingredientId: "10",
+        ingredientName: "Tea Concentrate",
+        quantityPerPortion: 0.03,
+        unit: "L",
+        totalCost: 3.6,
+        costPerUnit: 120,
+        costPerPortion: 3.6,
+      },
+      {
+        ingredientId: "11",
+        ingredientName: "Sugar",
+        quantityPerPortion: 0.02,
+        unit: "kg",
+        totalCost: 1.4,
+        costPerUnit: 70,
+        costPerPortion: 1.4,
+      },
+    ],
+    totalPlateCost: 5,
+    foodCostPercentage: 14,
+  },
+]
+
+export const seedPurchases: Purchase[] = [
+  ...mockPurchases,
+  {
+    id: "4",
+    date: new Date("2025-11-12"),
+    ingredientId: "9",
+    ingredientName: "Potato",
+    quantity: 10,
+    unit: "kg",
+    totalPrice: 600,
+    unitPrice: 60,
+    supplierId: "4",
+    supplier: "Fresh Harvest",
+    type: "Regular",
+  },
+  {
+    id: "5",
+    date: new Date("2025-11-12"),
+    ingredientId: "10",
+    ingredientName: "Tea Concentrate",
+    quantity: 5,
+    unit: "L",
+    totalPrice: 600,
+    unitPrice: 120,
+    supplierId: "5",
+    supplier: "Brew Supply",
+    type: "Regular",
+  },
+]
+
 export const mockAlerts: Alert[] = [
   {
     id: "1",
@@ -346,3 +613,53 @@ export const mockDishesOverTarget = [
     revenueImpact: 960,
   },
 ]
+
+export const seedSalesRecords: SalesRecord[] = [
+  {
+    id: "m_sale_1",
+    posItemId: "m1",
+    posItemName: "Chicken Burger",
+    date: new Date("2025-11-12"),
+    quantity: 140,
+  },
+  {
+    id: "m_sale_2",
+    posItemId: "m2",
+    posItemName: "Spaghetti Bowl",
+    date: new Date("2025-11-12"),
+    quantity: 120,
+  },
+  {
+    id: "m_sale_3",
+    posItemId: "m3",
+    posItemName: "Fries",
+    date: new Date("2025-11-12"),
+    quantity: 220,
+  },
+  {
+    id: "m_sale_4",
+    posItemId: "m4",
+    posItemName: "Iced Tea",
+    date: new Date("2025-11-12"),
+    quantity: 260,
+  },
+  {
+    id: "m_sale_5",
+    posItemId: "m1",
+    posItemName: "Chicken Burger",
+    date: new Date("2025-11-06"),
+    quantity: 110,
+  },
+  {
+    id: "m_sale_6",
+    posItemId: "m3",
+    posItemName: "Fries",
+    date: new Date("2025-11-06"),
+    quantity: 180,
+  },
+]
+
+export const seedDashboardKPI = mockDashboardKPI
+export const seedAnalyticsData = mockAnalyticsData
+export const seedDishesOverTarget = mockDishesOverTarget
+export const seedAlerts = mockAlerts

@@ -90,6 +90,7 @@ export interface Restaurant {
   categoryTargets: Record<string, number>;
   defaultCurrency: string;
   timezone: string;
+  posProvider?: string;
 }
 
 export interface AnalyticsDataPoint {
@@ -98,4 +99,12 @@ export interface AnalyticsDataPoint {
   category?: string;
   dishName?: string;
   variance?: number;
+}
+
+export interface SalesRecord {
+  id: string;
+  posItemId: string;
+  posItemName: string;
+  date: Date;
+  quantity: number;
 }

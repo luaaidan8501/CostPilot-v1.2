@@ -20,6 +20,7 @@ const navItems = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboardIcon },
   { href: '/ingredients', label: 'Ingredients', icon: PackageIcon },
   { href: '/purchases', label: 'Purchases', icon: ShoppingCartIcon },
+  { href: '/inventory', label: 'Inventory', icon: PackageIcon },
   { href: '/recipes-pos', label: 'Recipes & POS', icon: UtensilsCrossedIcon },
   { href: '/analytics', label: 'Analytics', icon: TrendingUpIcon },
   { href: '/alerts', label: 'Alerts', icon: BellIcon },
