@@ -30,6 +30,7 @@ export const mockIngredients: Ingredient[] = [
     benchmarkPrice: 165,
     lastPurchasedDate: new Date("2025-11-10"),
     priceTrend: [160, 162, 165, 168, 170, 175, 180, 182, 180, 180],
+    currentStock: 15.5,
   },
   {
     id: "2",
@@ -40,6 +41,7 @@ export const mockIngredients: Ingredient[] = [
     benchmarkPrice: 210,
     lastPurchasedDate: new Date("2025-11-08"),
     priceTrend: [200, 202, 205, 208, 210, 212, 215, 218, 220, 220],
+    currentStock: 8.2,
   },
   {
     id: "3",
@@ -50,6 +52,7 @@ export const mockIngredients: Ingredient[] = [
     benchmarkPrice: 48,
     lastPurchasedDate: new Date("2025-11-12"),
     priceTrend: [55, 52, 50, 48, 46, 45, 44, 43, 45, 45],
+    currentStock: 12.0,
   },
   {
     id: "4",
@@ -60,6 +63,7 @@ export const mockIngredients: Ingredient[] = [
     benchmarkPrice: 38,
     lastPurchasedDate: new Date("2025-11-11"),
     priceTrend: [40, 39, 38, 37, 36, 35, 35, 35, 35, 35],
+    currentStock: 18.5,
   },
   {
     id: "5",
@@ -70,6 +74,7 @@ export const mockIngredients: Ingredient[] = [
     benchmarkPrice: 240,
     lastPurchasedDate: new Date("2025-11-09"),
     priceTrend: [200, 210, 220, 230, 240, 245, 250, 250, 250, 250],
+    currentStock: 3.2,
   },
   {
     id: "6",
@@ -80,6 +85,7 @@ export const mockIngredients: Ingredient[] = [
     benchmarkPrice: 50,
     lastPurchasedDate: new Date("2025-11-07"),
     priceTrend: [48, 49, 49, 50, 50, 51, 51, 52, 52, 52],
+    currentStock: 50.0,
   },
   {
     id: "7",
@@ -90,6 +96,7 @@ export const mockIngredients: Ingredient[] = [
     benchmarkPrice: 80,
     lastPurchasedDate: new Date("2025-11-05"),
     priceTrend: [70, 72, 75, 77, 78, 80, 82, 85, 85, 85],
+    currentStock: 25.0,
   },
   {
     id: "8",
@@ -100,6 +107,7 @@ export const mockIngredients: Ingredient[] = [
     benchmarkPrice: 25,
     lastPurchasedDate: new Date("2025-11-10"),
     priceTrend: [25, 25, 25, 25, 25, 25, 25, 25, 25, 25],
+    currentStock: 10.0,
   },
 ]
 

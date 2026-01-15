@@ -8,6 +8,7 @@ export interface Ingredient {
   benchmarkPrice: number;
   lastPurchasedDate: Date;
   priceTrend: number[]; // 30-day trend
+  currentStock: number; // Current quantity on hand
 }
 
 export interface Supplier {
