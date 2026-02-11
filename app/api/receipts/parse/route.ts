@@ -1,9 +1,8 @@
 import { NextResponse } from 'next/server';
 import { TextractClient, AnalyzeExpenseCommand } from '@aws-sdk/client-textract';
-import { promises as fs } from 'fs';
-import path from 'path';
 
 import type { ReceiptItem } from '@/lib/types';
+import { supabaseServer } from '@/lib/supabase/server';
 
 export const runtime = 'nodejs';
 
@@ -182,12 +181,43 @@ export async function POST(request: Request) {
     const arrayBuffer = await file.arrayBuffer();
     const bytes = new Uint8Array(arrayBuffer);
 
-    const uploadsDir = path.join(process.cwd(), 'public', 'uploads', 'receipts');
-    await fs.mkdir(uploadsDir, { recursive: true });
+    if (!supabaseServer) {
+      return NextResponse.json(
+        { error: 'Missing Supabase credentials. Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.' },
+        { status: 400 }
+      );
+    }
+
     const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
     const fileName = `${Date.now()}_${safeName}`;
-    const filePath = path.join(uploadsDir, fileName);
-    await fs.writeFile(filePath, Buffer.from(bytes));
+    const bucket = process.env.SUPABASE_RECEIPTS_BUCKET || 'receipts';
+    const ttlEnv = Number(process.env.SUPABASE_RECEIPTS_SIGNED_URL_TTL);
+    const ttlSeconds = Number.isFinite(ttlEnv) ? ttlEnv : 60 * 60 * 24 * 7;
+
+    const { error: uploadError } = await supabaseServer.storage
+      .from(bucket)
+      .upload(fileName, Buffer.from(bytes), {
+        contentType: file.type,
+        upsert: false,
+      });
+
+    if (uploadError) {
+      return NextResponse.json(
+        { error: `Failed to upload receipt: ${uploadError.message}` },
+        { status: 500 }
+      );
+    }
+
+    const { data: signedUrlData, error: signedUrlError } = await supabaseServer.storage
+      .from(bucket)
+      .createSignedUrl(fileName, ttlSeconds);
+
+    if (signedUrlError || !signedUrlData?.signedUrl) {
+      return NextResponse.json(
+        { error: signedUrlError?.message || 'Failed to generate receipt URL' },
+        { status: 500 }
+      );
+    }
 
     let items: ReceiptItem[] = [];
     let receiptDate: Date | null = null;
@@ -223,7 +253,7 @@ export async function POST(request: Request) {
     return NextResponse.json({
       items,
       receiptDate: receiptDate ? receiptDate.toISOString() : null,
-      fileUrl: `/uploads/receipts/${fileName}`,
+      fileUrl: signedUrlData.signedUrl,
       usedFallback,
     });
   } catch (error) {
