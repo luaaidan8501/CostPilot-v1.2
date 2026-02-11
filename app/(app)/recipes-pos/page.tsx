@@ -158,7 +158,6 @@ export default function RecipesPosPage() {
         selectedUnit: "kg",
       },
     });
-    setEditMode(false);
   }, [recipe, selectedPosItemId]);
 
   const categories = useMemo(() => {
