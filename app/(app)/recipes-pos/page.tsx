@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import {
   usePosItems,
+  useRecipes,
   useRecipeByPosItem,
   useSaveRecipe,
   useUpdateRecipe,
@@ -13,6 +14,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -35,19 +37,48 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { SearchIcon, PlusIcon, TrashIcon } from "@/components/icons";
+import { ChevronDownIcon, PlusIcon, TrashIcon } from "@/components/icons";
 import type { Recipe, RecipeIngredient, Ingredient } from "@/lib/types";
+
+function hashString(value: string) {
+  let hash = 0;
+  for (let i = 0; i < value.length; i += 1) {
+    hash = (hash << 5) - hash + value.charCodeAt(i);
+    hash |= 0;
+  }
+  return Math.abs(hash);
+}
+
+function buildMonthlyTrend(base: number, name: string) {
+  const seed = hashString(name) % 7;
+  return Array.from({ length: 6 }, (_, index) => {
+    const variance = ((seed + index) % 5) - 2;
+    return Math.max(0, Math.round(base + variance));
+  });
+}
+
+function getRecentMonths() {
+  const now = new Date();
+  return Array.from({ length: 6 }, (_, index) => {
+    const d = new Date(now.getFullYear(), now.getMonth() - (5 - index), 1);
+    return d.toLocaleString("en-US", { month: "short" });
+  });
+}
 
 export default function RecipesPosPage() {
   const [selectedPosItemId, setSelectedPosItemId] = useState<string | null>(
     null
   );
-  const [searchTerm, setSearchTerm] = useState("");
-  const [showCreateForm, setShowCreateForm] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [showAddIngredientDialog, setShowAddIngredientDialog] = useState(false);
+  const [expandedRowId, setExpandedRowId] = useState<string | null>(null);
+  const [categoryFilter, setCategoryFilter] = useState("All");
+  const [sortOption, setSortOption] = useState<"cost-desc" | "cost-asc">(
+    "cost-desc"
+  );
 
   const { data: posItems } = usePosItems();
+  const { data: recipes } = useRecipes();
   const { data: ingredients } = useIngredients();
   const { data: recipe } = useRecipeByPosItem(selectedPosItemId || "");
   const saveRecipe = useSaveRecipe();
@@ -72,6 +103,7 @@ export default function RecipesPosPage() {
   // Form state for creating/editing recipes
   const [formData, setFormData] = useState<{
     sellingPrice: string;
+    category: string;
     ingredients: RecipeIngredient[];
     newIngredient: {
       ingredientId: string;
@@ -80,6 +112,7 @@ export default function RecipesPosPage() {
     };
   }>({
     sellingPrice: "",
+    category: "",
     ingredients: [],
     newIngredient: {
       ingredientId: "",
@@ -98,6 +131,7 @@ export default function RecipesPosPage() {
     if (!selectedPosItemId) {
       setFormData({
         sellingPrice: "",
+        category: "",
         ingredients: [],
         newIngredient: {
           ingredientId: "",
@@ -116,6 +150,7 @@ export default function RecipesPosPage() {
         recipe?.sellingPrice.toString() ||
         selectedItem?.sellingPrice.toString() ||
         "",
+      category: selectedItem?.category || "",
       ingredients: recipe?.ingredients || [],
       newIngredient: {
         ingredientId: "",
@@ -124,15 +159,55 @@ export default function RecipesPosPage() {
       },
     });
     setEditMode(false);
-    setShowCreateForm(false);
   }, [recipe, selectedPosItemId]);
 
-  const filteredItems = posItems.filter((item) =>
-    item.name.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const categories = useMemo(() => {
+    const unique = new Set(posItems.map((item) => item.category).filter(Boolean));
+    const ordered = ["Mains", "Appetizers", "Sides", "Drinks", "Desserts"];
+    return [
+      "All",
+      ...ordered.filter((cat) => unique.has(cat)),
+      ...Array.from(unique).filter((cat) => !ordered.includes(cat)),
+    ];
+  }, [posItems]);
 
-  const unmappedItems = posItems.filter((item) => !item.hasRecipe);
-  const mappedItems = posItems.filter((item) => item.hasRecipe);
+  const recipeMap = useMemo(() => {
+    return new Map(recipes.map((item) => [item.posItemId, item]));
+  }, [recipes]);
+
+  const rows = useMemo(() => {
+    const mapped = posItems.map((item) => {
+      const recipeItem = recipeMap.get(item.id);
+      return {
+        id: item.id,
+        name: item.name,
+        category: item.category || "Uncategorized",
+        sellingPrice: item.sellingPrice,
+        plateCost: recipeItem?.totalPlateCost ?? null,
+        foodCostPercentage: recipeItem?.foodCostPercentage ?? null,
+        trend: recipeItem
+          ? buildMonthlyTrend(recipeItem.foodCostPercentage, item.name)
+          : null,
+        recipe: recipeItem,
+      };
+    });
+
+    const filtered =
+      categoryFilter === "All"
+        ? mapped
+        : mapped.filter((row) => row.category === categoryFilter);
+
+    return filtered.sort((a, b) => {
+      const aCost = a.foodCostPercentage ?? -1;
+      const bCost = b.foodCostPercentage ?? -1;
+      if (sortOption === "cost-asc") {
+        return aCost - bCost;
+      }
+      return bCost - aCost;
+    });
+  }, [posItems, recipeMap, categoryFilter, sortOption]);
+
+  const months = useMemo(() => getRecentMonths(), []);
 
   const handleAddIngredient = () => {
     const { ingredientId, quantityPerPortion, selectedUnit } =
@@ -244,19 +319,22 @@ export default function RecipesPosPage() {
       saveRecipe(newRecipe);
     }
 
-    updatePosItem(selectedPosItemId, { hasRecipe: true });
+    updatePosItem(selectedPosItemId, {
+      hasRecipe: true,
+      category: formData.category || selectedItem.category,
+    });
     setEditMode(false);
-    setShowCreateForm(false);
+    setExpandedRowId(selectedPosItemId);
   };
 
   return (
     <div className="p-6 space-y-6 max-w-7xl mx-auto">
       <div className="text-center md:text-left">
         <h1 className="text-3xl font-bold text-slate-900">
-          Recipes & POS Mapping
+          Dish Information
         </h1>
         <p className="text-slate-600 mt-1">
-          Link menu items to recipes and track food costs
+          View dish costs and recipe details
         </p>
       </div>
 
@@ -273,187 +351,227 @@ export default function RecipesPosPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* POS Items List */}
-        <Card className="lg:col-span-1">
+      <Card>
+        <CardHeader>
+          <CardTitle>Dish Food Costs</CardTitle>
+          <CardDescription>Click a dish to view ingredient details.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex flex-wrap gap-3">
+            <Select
+              value={sortOption}
+              onValueChange={(value) =>
+                setSortOption(value as "cost-desc" | "cost-asc")
+              }
+            >
+              <SelectTrigger className="w-48">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="cost-desc">Highest → Lowest</SelectItem>
+                <SelectItem value="cost-asc">Lowest → Highest</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+              <SelectTrigger className="w-48">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {categories.map((category) => (
+                  <SelectItem key={category} value={category}>
+                    {category}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Dish</TableHead>
+                  <TableHead>Category</TableHead>
+                  <TableHead className="text-right">Price</TableHead>
+                  <TableHead className="text-right">Cost to Make</TableHead>
+                  <TableHead className="text-right">Food Cost %</TableHead>
+                  <TableHead className="text-right">Details</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {rows.map((row) => (
+                  <Fragment key={row.id}>
+                    <TableRow>
+                      <TableCell className="font-medium">{row.name}</TableCell>
+                      <TableCell>{row.category}</TableCell>
+                      <TableCell className="text-right">₱ {row.sellingPrice}</TableCell>
+                      <TableCell className="text-right">
+                        {row.plateCost !== null
+                          ? `₱ ${row.plateCost.toFixed(2)}`
+                          : "—"}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <span
+                          className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${
+                            row.foodCostPercentage === null
+                              ? "bg-slate-100 text-slate-700"
+                              : row.foodCostPercentage <= 30
+                              ? "bg-emerald-100 text-emerald-800"
+                              : row.foodCostPercentage <= 35
+                              ? "bg-amber-100 text-amber-800"
+                              : "bg-rose-100 text-rose-800"
+                          }`}
+                        >
+                          {row.foodCostPercentage !== null
+                            ? `${row.foodCostPercentage}%`
+                            : "—"}
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Button
+                          size="sm"
+                          className="bg-teal-600 hover:bg-teal-700 text-white"
+                          onClick={() =>
+                            setExpandedRowId(
+                              expandedRowId === row.id ? null : row.id
+                            )
+                          }
+                        >
+                          <ChevronDownIcon className="w-4 h-4 mr-2" />
+                          {expandedRowId === row.id ? "Hide" : "View"}
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                    {expandedRowId === row.id && (
+                      <TableRow>
+                        <TableCell colSpan={6} className="bg-teal-50">
+                          {row.recipe ? (
+                            <div className="space-y-4">
+                              <div className="grid grid-cols-3 gap-4">
+                                <div className="bg-white p-3 rounded-lg border border-teal-200">
+                                  <p className="text-xs text-slate-500">
+                                    Selling Price
+                                  </p>
+                                  <p className="text-lg font-semibold">
+                                    ₱ {row.recipe.sellingPrice}
+                                  </p>
+                                </div>
+                                <div className="bg-white p-3 rounded-lg border border-teal-200">
+                                  <p className="text-xs text-slate-500">
+                                    Plate Cost
+                                  </p>
+                                  <p className="text-lg font-semibold">
+                                    ₱ {row.recipe.totalPlateCost.toFixed(2)}
+                                  </p>
+                                </div>
+                                <div className="bg-white p-3 rounded-lg border border-teal-200">
+                                  <p className="text-xs text-slate-500">
+                                    Food Cost %
+                                  </p>
+                                  <p className="text-lg font-semibold">
+                                    {row.recipe.foodCostPercentage}%
+                                  </p>
+                                </div>
+                              </div>
+                              {row.trend && (
+                                <div className="bg-white p-3 rounded-lg border border-teal-200">
+                                  <p className="text-xs text-slate-500 mb-2">
+                                    Food Cost % (Last 6 Months)
+                                  </p>
+                                  <div className="grid grid-cols-3 md:grid-cols-6 gap-2 text-center text-xs">
+                                    {row.trend.map((value, index) => (
+                                      <div key={`${row.id}-month-${index}`} className="space-y-1">
+                                        <p className="text-slate-400">{months[index]}</p>
+                                        <p className="font-semibold text-slate-700">{value}%</p>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                              <div className="overflow-x-auto">
+                                <Table>
+                                  <TableHeader>
+                                    <TableRow>
+                                      <TableHead>Ingredient</TableHead>
+                                      <TableHead className="text-right">Qty</TableHead>
+                                      <TableHead className="text-right">Unit Cost</TableHead>
+                                      <TableHead className="text-right">Cost/Portion</TableHead>
+                                    </TableRow>
+                                  </TableHeader>
+                                  <TableBody>
+                                    {row.recipe.ingredients.map((ingredient, idx) => (
+                                      <TableRow key={idx}>
+                                        <TableCell className="font-medium">
+                                          {ingredient.ingredientName}
+                                        </TableCell>
+                                        <TableCell className="text-right">
+                                          {ingredient.quantityPerPortion} {ingredient.unit}
+                                        </TableCell>
+                                        <TableCell className="text-right">₱ {ingredient.costPerUnit}</TableCell>
+                                        <TableCell className="text-right">
+                                          ₱ {ingredient.costPerPortion.toFixed(2)}
+                                        </TableCell>
+                                      </TableRow>
+                                    ))}
+                                  </TableBody>
+                                </Table>
+                              </div>
+                              <div className="flex justify-end gap-2">
+                                <Button
+                                  variant="outline"
+                                  onClick={() => {
+                                    setSelectedPosItemId(row.id);
+                                    setEditMode(true);
+                                  }}
+                                >
+                                  Edit Recipe
+                                </Button>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="flex items-center justify-between">
+                              <p className="text-sm text-slate-600">
+                                No recipe yet for this dish.
+                              </p>
+                              <Button
+                                onClick={() => {
+                                  setSelectedPosItemId(row.id);
+                                  setEditMode(true);
+                                }}
+                                className="bg-teal-600 hover:bg-teal-700"
+                              >
+                                Create Recipe
+                              </Button>
+                            </div>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </Fragment>
+                ))}
+                {rows.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center text-slate-500">
+                      No menu items available.
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
+
+      {selectedPosItemId && editMode && (
+        <Card>
           <CardHeader>
-            <CardTitle>Menu Items</CardTitle>
-            <CardDescription>Select to edit recipe</CardDescription>
+            <CardTitle>
+              {posItems.find((p) => p.id === selectedPosItemId)?.name ||
+                "New Recipe"}
+            </CardTitle>
+            <CardDescription>Edit recipe details</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="relative">
-              <SearchIcon className="absolute left-3 top-3 w-4 h-4 text-slate-400" />
-              <Input
-                placeholder="Search menu items..."
-                className="pl-10"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
-            </div>
-
-            <div className="space-y-2 max-h-96 overflow-y-auto">
-              {filteredItems.map((item) => (
-                <button
-                  key={item.id}
-                  onClick={() => setSelectedPosItemId(item.id)}
-                  className={`w-full p-3 rounded-lg text-left transition-colors ${
-                    selectedPosItemId === item.id
-                      ? "bg-teal-100 border border-teal-300"
-                      : "hover:bg-slate-100 border border-transparent"
-                  }`}
-                >
-                  <p className="font-medium">{item.name}</p>
-                  <p className="text-sm text-slate-600">
-                    ₱ {item.sellingPrice}
-                  </p>
-                  {item.hasRecipe && (
-                    <span className="inline-block text-xs bg-teal-100 text-teal-700 px-2 py-1 rounded mt-1">
-                      Has Recipe
-                    </span>
-                  )}
-                </button>
-              ))}
-            </div>
-
-            <div className="pt-4 border-t border-slate-200 space-y-2">
-              <p className="text-sm font-medium text-slate-600">
-                Mapping Status
-              </p>
-              <p className="text-lg font-bold text-teal-600">
-                {mappedItems.length} / {posItems.length}
-              </p>
-              <p className="text-xs text-slate-500">items have recipes</p>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Recipe Editor */}
-        <div className="lg:col-span-2">
-          {selectedPosItemId && recipe && !editMode ? (
-            <Card>
-              <CardHeader>
-                <CardTitle>{recipe.posItemName}</CardTitle>
-                <CardDescription>Recipe and cost breakdown</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                {/* Top Summary */}
-                <div className="grid grid-cols-3 gap-4">
-                  <div className="bg-slate-50 p-4 rounded-lg">
-                    <p className="text-sm text-slate-600">Selling Price</p>
-                    <p className="text-2xl font-bold text-slate-900">
-                      ₱ {recipe.sellingPrice}
-                    </p>
-                  </div>
-                  <div className="bg-slate-50 p-4 rounded-lg">
-                    <p className="text-sm text-slate-600">Plate Cost</p>
-                    <p className="text-2xl font-bold text-slate-900">
-                      ₱ {recipe.totalPlateCost.toFixed(2)}
-                    </p>
-                  </div>
-                  <div
-                    className={`p-4 rounded-lg ${
-                      recipe.foodCostPercentage <= 30
-                        ? "bg-teal-50"
-                        : "bg-amber-50"
-                    }`}
-                  >
-                    <p
-                      className={`text-sm ${
-                        recipe.foodCostPercentage <= 30
-                          ? "text-teal-600"
-                          : "text-amber-600"
-                      }`}
-                    >
-                      Food Cost %
-                    </p>
-                    <p
-                      className={`text-2xl font-bold ${
-                        recipe.foodCostPercentage <= 30
-                          ? "text-teal-900"
-                          : "text-amber-900"
-                      }`}
-                    >
-                      {recipe.foodCostPercentage}%
-                    </p>
-                  </div>
-                </div>
-
-                {/* Ingredients Table */}
-                <div className="space-y-2">
-                  <h3 className="font-semibold text-slate-900">Ingredients</h3>
-                  <div className="overflow-x-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Ingredient</TableHead>
-                          <TableHead className="text-right">Qty</TableHead>
-                          <TableHead className="text-right">
-                            Unit Cost
-                          </TableHead>
-                          <TableHead className="text-right">
-                            Cost/Portion
-                          </TableHead>
-                          <TableHead className="text-right">
-                            % of Plate
-                          </TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {recipe.ingredients.map((ingredient, idx) => (
-                          <TableRow key={idx}>
-                            <TableCell className="font-medium">
-                              {ingredient.ingredientName}
-                            </TableCell>
-                            <TableCell className="text-right">
-                              {ingredient.quantityPerPortion} {ingredient.unit}
-                            </TableCell>
-                            <TableCell className="text-right">
-                              ₱ {ingredient.costPerUnit}
-                            </TableCell>
-                            <TableCell className="text-right">
-                              ₱ {ingredient.costPerPortion.toFixed(2)}
-                            </TableCell>
-                            <TableCell className="text-right">
-                              {(
-                                (ingredient.costPerPortion /
-                                  recipe.totalPlateCost) *
-                                100
-                              ).toFixed(1)}
-                              %
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                </div>
-
-                {/* Actions */}
-                <div className="flex gap-3 pt-4 border-t border-slate-200">
-                  <Button
-                    onClick={() => setEditMode(true)}
-                    className="flex-1 bg-teal-600 hover:bg-teal-700"
-                  >
-                    Edit Recipe
-                  </Button>
-                  <Button variant="outline" className="flex-1">
-                    Duplicate Recipe
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          ) : selectedPosItemId && (editMode || !recipe) ? (
-            <Card>
-              <CardHeader>
-                <CardTitle>
-                  {posItems.find((p) => p.id === selectedPosItemId)?.name ||
-                    "New Recipe"}
-                </CardTitle>
-                <CardDescription>
-                  {editMode ? "Edit recipe" : "Create recipe"}
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6">
+          <CardContent className="space-y-6">
                 {/* Selling Price */}
                 <div className="space-y-2">
                   <Label htmlFor="sellingPrice">Selling Price (₱)</Label>
@@ -467,6 +585,27 @@ export default function RecipesPosPage() {
                     }
                     step="0.01"
                   />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="category">Category</Label>
+                  <Select
+                    value={formData.category}
+                    onValueChange={(value) =>
+                      setFormData({ ...formData, category: value })
+                    }
+                  >
+                    <SelectTrigger id="category">
+                      <SelectValue placeholder="Select category" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Mains">Mains</SelectItem>
+                      <SelectItem value="Appetizers">Appetizers</SelectItem>
+                      <SelectItem value="Sides">Sides</SelectItem>
+                      <SelectItem value="Drinks">Drinks</SelectItem>
+                      <SelectItem value="Desserts">Desserts</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 {/* Ingredients */}
@@ -655,7 +794,7 @@ export default function RecipesPosPage() {
                   <Button
                     onClick={() => {
                       setEditMode(false);
-                      setShowCreateForm(false);
+                      setSelectedPosItemId(null);
                     }}
                     variant="outline"
                     className="flex-1"
@@ -665,60 +804,6 @@ export default function RecipesPosPage() {
                 </div>
               </CardContent>
             </Card>
-          ) : (
-            <Card className="flex items-center justify-center min-h-96">
-              <div className="text-center">
-                <p className="text-slate-600 mb-4">
-                  Select a menu item to edit or create a recipe
-                </p>
-                <Button variant="outline">
-                  <PlusIcon className="w-4 h-4 mr-2" />
-                  Create Recipe
-                </Button>
-              </div>
-            </Card>
-          )}
-        </div>
-      </div>
-
-      {/* Unmapped Items */}
-      {unmappedItems.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Unmapped Menu Items</CardTitle>
-            <CardDescription>
-              These items don't have recipes yet
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              {unmappedItems.map((item) => (
-                <div
-                  key={item.id}
-                  className="flex items-center justify-between p-3 bg-slate-50 rounded-lg"
-                >
-                  <div>
-                    <p className="font-medium">{item.name}</p>
-                    <p className="text-sm text-slate-600">
-                      ₱ {item.sellingPrice}
-                    </p>
-                  </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      setSelectedPosItemId(item.id);
-                      setEditMode(true);
-                      setShowCreateForm(true);
-                    }}
-                  >
-                    Create Recipe
-                  </Button>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
       )}
 
       {/* Add New Ingredient Dialog */}

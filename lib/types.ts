@@ -109,3 +109,23 @@ export interface SalesRecord {
   date: Date;
   quantity: number;
 }
+
+export interface ReceiptItem {
+  id: string;
+  sku: string;
+  name: string;
+  quantity: number;
+  unit: string;
+  unitPrice: number;
+  totalPrice: number;
+}
+
+export interface Receipt {
+  id: string;
+  fileName: string;
+  fileUrl?: string;
+  uploadedAt: Date;
+  receiptDate?: Date;
+  weekStart: Date;
+  items: ReceiptItem[];
+}

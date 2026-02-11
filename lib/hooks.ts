@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useEffect, useMemo } from 'react';
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import {
   mockRestaurant,
   mockIngredients,
@@ -31,6 +31,7 @@ import {
   recipeDb,
   posItemDb,
   salesDb,
+  receiptDb,
   alertDb,
   analyticsDb,
   dishesDb,
@@ -38,7 +39,9 @@ import {
   setSeedData,
   loadSeedRestaurant,
   subscribeToSales,
+  subscribeToReceipts,
 } from './db';
+import { storage } from './storage';
 import type {
   Ingredient,
   Purchase,
@@ -49,6 +52,7 @@ import type {
   Restaurant,
   AnalyticsDataPoint,
   SalesRecord,
+  Receipt,
 } from './types';
 
 // Initialize database on first hook call
@@ -218,6 +222,61 @@ export function useSetSalesRecords() {
   ensureDbInitialized();
   return useCallback((records: SalesRecord[]) => {
     salesDb.set(records);
+  }, []);
+}
+
+export function useReceipts() {
+  ensureDbInitialized();
+  const [isLoading] = useState(false);
+  const [receipts, setReceipts] = useState(() => receiptDb.getAll());
+  const hasHydratedRef = useRef(false);
+
+  useEffect(() => {
+    if (!hasHydratedRef.current && typeof window !== 'undefined') {
+      const savedReceipts = storage.getReceipts();
+      if (savedReceipts.length > 0) {
+        receiptDb.set(savedReceipts);
+      }
+      hasHydratedRef.current = true;
+    }
+    const update = () => setReceipts(receiptDb.getAll());
+    update();
+    return subscribeToReceipts(update);
+  }, []);
+
+  return {
+    data: receipts,
+    isLoading,
+    error: null,
+  };
+}
+
+export function useAddReceipts() {
+  ensureDbInitialized();
+  return useCallback((receipts: Receipt[]) => {
+    receiptDb.addMany(receipts);
+  }, []);
+}
+
+export function useSetupComplete() {
+  const [setupComplete, setSetupComplete] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    setSetupComplete(storage.getSetupComplete());
+    const handleUpdate = () => setSetupComplete(storage.getSetupComplete());
+    window.addEventListener('costpilot-setup-complete', handleUpdate);
+    return () => window.removeEventListener('costpilot-setup-complete', handleUpdate);
+  }, []);
+
+  return setupComplete;
+}
+
+export function useSetSetupComplete() {
+  return useCallback((value: boolean) => {
+    if (typeof window === 'undefined') return;
+    storage.setSetupComplete(value);
+    window.dispatchEvent(new Event('costpilot-setup-complete'));
   }, []);
 }
 

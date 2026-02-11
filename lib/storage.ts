@@ -10,6 +10,7 @@ import type {
   Alert,
   DashboardKPI,
   AnalyticsDataPoint,
+  Receipt,
 } from './types';
 
 const STORAGE_PREFIX = 'costpilot_';
@@ -24,6 +25,8 @@ interface StoredData {
   dashboardKPI: DashboardKPI | null;
   analyticsData: AnalyticsDataPoint[];
   dishesOverTarget: any[];
+  receipts: Receipt[];
+  setupComplete: boolean;
 }
 
 const defaultData: StoredData = {
@@ -36,6 +39,8 @@ const defaultData: StoredData = {
   dashboardKPI: null,
   analyticsData: [],
   dishesOverTarget: [],
+  receipts: [],
+  setupComplete: false,
 };
 
 export const storage = {
@@ -154,5 +159,33 @@ export const storage = {
   clearAll: () => {
     if (typeof window === 'undefined') return;
     localStorage.removeItem(`${STORAGE_PREFIX}data`);
+  },
+
+  // Receipts
+  getReceipts: (): Receipt[] => {
+    const receipts = storage.getAll().receipts as any[];
+    return receipts.map((receipt) => ({
+      ...receipt,
+      uploadedAt: new Date(receipt.uploadedAt),
+      weekStart: new Date(receipt.weekStart),
+      receiptDate: receipt.receiptDate ? new Date(receipt.receiptDate) : undefined,
+    }));
+  },
+
+  saveReceipts: (receipts: Receipt[]) => {
+    const data = storage.getAll();
+    data.receipts = receipts;
+    storage.saveAll(data);
+  },
+
+  // Setup completion
+  getSetupComplete: (): boolean => {
+    return storage.getAll().setupComplete;
+  },
+
+  setSetupComplete: (value: boolean) => {
+    const data = storage.getAll();
+    data.setupComplete = value;
+    storage.saveAll(data);
   },
 };

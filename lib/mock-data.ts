@@ -312,6 +312,7 @@ export const seedIngredients: Ingredient[] = [
     benchmarkPrice: 58,
     lastPurchasedDate: new Date("2025-11-10"),
     priceTrend: [55, 56, 56, 57, 58, 59, 60, 60, 60, 60],
+    currentStock: 22.5,
   },
   {
     id: "10",
@@ -322,6 +323,7 @@ export const seedIngredients: Ingredient[] = [
     benchmarkPrice: 115,
     lastPurchasedDate: new Date("2025-11-11"),
     priceTrend: [110, 112, 112, 113, 114, 115, 118, 120, 120, 120],
+    currentStock: 18,
   },
   {
     id: "11",
@@ -332,6 +334,7 @@ export const seedIngredients: Ingredient[] = [
     benchmarkPrice: 68,
     lastPurchasedDate: new Date("2025-11-12"),
     priceTrend: [65, 66, 66, 67, 68, 69, 70, 70, 70, 70],
+    currentStock: 35,
   },
 ]
 
@@ -627,42 +630,42 @@ export const seedSalesRecords: SalesRecord[] = [
     id: "m_sale_1",
     posItemId: "m1",
     posItemName: "Chicken Burger",
-    date: new Date("2025-11-12"),
+    date: new Date("2026-02-01"),
     quantity: 140,
   },
   {
     id: "m_sale_2",
     posItemId: "m2",
     posItemName: "Spaghetti Bowl",
-    date: new Date("2025-11-12"),
+    date: new Date("2026-02-01"),
     quantity: 120,
   },
   {
     id: "m_sale_3",
     posItemId: "m3",
     posItemName: "Fries",
-    date: new Date("2025-11-12"),
+    date: new Date("2026-02-01"),
     quantity: 220,
   },
   {
     id: "m_sale_4",
     posItemId: "m4",
     posItemName: "Iced Tea",
-    date: new Date("2025-11-12"),
+    date: new Date("2026-02-01"),
     quantity: 260,
   },
   {
     id: "m_sale_5",
     posItemId: "m1",
     posItemName: "Chicken Burger",
-    date: new Date("2025-11-06"),
+    date: new Date("2026-01-28"),
     quantity: 110,
   },
   {
     id: "m_sale_6",
     posItemId: "m3",
     posItemName: "Fries",
-    date: new Date("2025-11-06"),
+    date: new Date("2026-01-28"),
     quantity: 180,
   },
 ]

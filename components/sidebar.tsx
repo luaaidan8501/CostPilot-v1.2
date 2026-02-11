@@ -3,14 +3,13 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { useRestaurant } from '@/lib/hooks';
+import { useRestaurant, useSetupComplete } from '@/lib/hooks';
 import { cn } from '@/lib/utils';
 import {
   LayoutDashboardIcon,
   PackageIcon,
   ShoppingCartIcon,
   UtensilsCrossedIcon,
-  TrendingUpIcon,
   BellIcon,
   SettingsIcon,
   ChefHatIcon,
@@ -18,19 +17,24 @@ import {
 
 const navItems = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboardIcon },
-  { href: '/ingredients', label: 'Ingredients', icon: PackageIcon },
   { href: '/purchases', label: 'Purchases', icon: ShoppingCartIcon },
   { href: '/inventory', label: 'Inventory', icon: PackageIcon },
-  { href: '/recipes-pos', label: 'Recipes & POS', icon: UtensilsCrossedIcon },
-  { href: '/analytics', label: 'Analytics', icon: TrendingUpIcon },
+  { href: '/recipes-pos', label: 'Dish Information', icon: UtensilsCrossedIcon },
   { href: '/alerts', label: 'Alerts', icon: BellIcon },
   { href: '/settings', label: 'Settings', icon: SettingsIcon },
+];
+
+const setupItems = [
+  { href: '/setup/menu', label: '1. Add Menu', icon: UtensilsCrossedIcon },
+  { href: '/setup/recipes', label: '2. Add Recipes', icon: ChefHatIcon },
+  { href: '/setup/complete', label: '3. Finish Setup', icon: LayoutDashboardIcon },
 ];
 
 export function Sidebar() {
   const [mounted, setMounted] = useState(false);
   const pathname = usePathname();
   const { data: restaurant } = useRestaurant();
+  const setupComplete = useSetupComplete();
 
   useEffect(() => {
     setMounted(true);
@@ -63,7 +67,7 @@ export function Sidebar() {
       </div>
 
       <nav className="flex-1 p-4 space-y-2">
-        {navItems.map((item) => {
+        {(setupComplete ? navItems : setupItems).map((item) => {
           const Icon = item.icon;
           const isActive = pathname === item.href;
           return (
@@ -84,7 +88,12 @@ export function Sidebar() {
         })}
       </nav>
 
-      <div className="p-4 border-t border-slate-800">
+      <div className="p-4 border-t border-slate-800 space-y-3">
+        {!setupComplete && (
+          <div className="px-4 py-3 bg-slate-800 rounded-lg text-xs text-slate-300">
+            Complete setup to unlock the full dashboard.
+          </div>
+        )}
         <div className="px-4 py-3 bg-slate-800 rounded-lg text-sm">
           <p className="text-slate-400">Signed in as</p>
           <p className="font-medium text-white">{restaurant?.name || 'Your Restaurant'}</p>

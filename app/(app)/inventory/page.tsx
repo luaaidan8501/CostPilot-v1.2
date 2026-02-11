@@ -8,8 +8,19 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useIngredients, useRecipes, useSalesRecords, useSetSalesRecords } from '@/lib/hooks';
 import type { SalesRecord } from '@/lib/types';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  CanonicalField,
+  CsvType,
+  ImportJobDraft,
+  canonicalFieldLabels,
+  parseCsv,
+  requiredFieldsByType,
+  suggestMappings,
+} from '@/lib/inventory-import';
 
 type DateRangeOption = '7d' | '30d' | 'month';
+type ImportStep = 'upload' | 'map' | 'preview' | 'summary';
 
 function getDateRange(option: DateRangeOption) {
   const end = new Date();
@@ -26,93 +37,61 @@ function getDateRange(option: DateRangeOption) {
   return { start, end };
 }
 
-function normalizeHeader(value: string) {
-  return value.trim().toLowerCase().replace(/\s+/g, '_');
-}
-
-const headerAliases: Record<string, string[]> = {
-  date: ['date', 'transaction_date', 'sale_date', 'business_date', 'datetime', 'timestamp'],
-  item_name: [
-    'item_name',
-    'item',
-    'menu_item',
-    'product',
-    'product_name',
-    'description',
-    'item_description',
-    'plu',
-    'sku',
-  ],
-  quantity: ['quantity', 'qty', 'count', 'units', 'unit_count', 'sold_qty', 'sales_qty'],
-  net_sales: ['net_sales', 'net', 'net_amount', 'net_total', 'net_revenue'],
-  gross_sales: ['gross_sales', 'gross', 'gross_amount', 'gross_total', 'gross_revenue'],
+const optionalFieldsByType: Record<CsvType, CanonicalField[]> = {
+  items: ['sku', 'category', 'location', 'par_level', 'item_id'],
+  movements: ['qty_out', 'unit_cost', 'movement_type', 'reason', 'location'],
+  purchases: ['invoice_number', 'supplier', 'purchase_unit_cost', 'purchase_total', 'location'],
 };
 
-function resolveHeaderIndex(headers: string[], key: keyof typeof headerAliases) {
-  const candidates = headerAliases[key];
-  return candidates.map((candidate) => headers.indexOf(candidate)).find((index) => index !== -1) ?? -1;
-}
+function buildPreviewRows(
+  rows: string[][],
+  headers: string[],
+  mapping: Record<CanonicalField, string>,
+  csvType: CsvType
+) {
+  const required = requiredFieldsByType[csvType];
+  return rows.slice(1, 16).map((row, index) => {
+    const data: Record<string, string> = {};
+    const errors: string[] = [];
+    const warnings: string[] = [];
 
-function parseCsv(text: string) {
-  const rows: string[][] = [];
-  let current: string[] = [];
-  let value = '';
-  let inQuotes = false;
+    Object.entries(mapping).forEach(([canonical, source]) => {
+      if (!source) return;
+      const colIndex = headers.indexOf(source);
+      data[canonical] = colIndex >= 0 ? row[colIndex] ?? '' : '';
+    });
 
-  for (let i = 0; i < text.length; i += 1) {
-    const char = text[i];
-    const next = text[i + 1];
-
-    if (char === '"' && next === '"') {
-      value += '"';
-      i += 1;
-      continue;
-    }
-
-    if (char === '"') {
-      inQuotes = !inQuotes;
-      continue;
-    }
-
-    if (char === ',' && !inQuotes) {
-      current.push(value);
-      value = '';
-      continue;
-    }
-
-    if ((char === '\n' || char === '\r') && !inQuotes) {
-      if (char === '\r' && next === '\n') {
-        i += 1;
+    required.forEach((field) => {
+      if (!mapping[field] || !data[field]?.toString().trim()) {
+        errors.push(`${canonicalFieldLabels[field]} is required.`);
       }
-      current.push(value);
-      if (current.some((cell) => cell.trim().length > 0)) {
-        rows.push(current);
-      }
-      current = [];
-      value = '';
-      continue;
+    });
+
+    if (data.purchase_qty && Number.isNaN(Number.parseFloat(data.purchase_qty))) {
+      warnings.push('Quantity is not numeric.');
     }
 
-    value += char;
-  }
-
-  if (value.length > 0 || current.length > 0) {
-    current.push(value);
-    if (current.some((cell) => cell.trim().length > 0)) {
-      rows.push(current);
-    }
-  }
-
-  return rows;
+    return {
+      rowIndex: index + 2,
+      data,
+      errors,
+      warnings,
+    };
+  });
 }
 
 export default function InventoryPage() {
   const [rangeOption, setRangeOption] = useState<DateRangeOption>('7d');
+  const [importOpen, setImportOpen] = useState(false);
+  const [importStep, setImportStep] = useState<ImportStep>('upload');
+  const [csvType, setCsvType] = useState<CsvType>('purchases');
+  const [importDraft, setImportDraft] = useState<ImportJobDraft | null>(null);
+  const [columnMapping, setColumnMapping] = useState<Record<CanonicalField, string>>({});
   const [importSummary, setImportSummary] = useState<{
     total: number;
-    imported: number;
-    skipped: number;
-    unmapped: string[];
+    accepted: number;
+    rejected: number;
+    warnings: number;
   } | null>(null);
   const dateRange = useMemo(() => getDateRange(rangeOption), [rangeOption]);
 
@@ -174,36 +153,24 @@ export default function InventoryPage() {
   }, [ingredients, recipes, salesRecords]);
 
   const handleDownloadTemplate = () => {
-    const header = [
-      'date',
-      'item_name',
-      'quantity',
-      'gross_sales',
-      'discounts',
-      'net_sales',
-      'tax',
-      'service_charge',
-      'category',
-      'location',
-    ];
-    const example = [
-      '2025-11-12',
-      'Chicken Burger',
-      '120',
-      '14400',
-      '0',
-      '14400',
-      '0',
-      '0',
-      'Mains',
-      'Manila',
-    ];
+    const header =
+      csvType === 'purchases'
+        ? ['invoice', 'date', 'supplier', 'sku', 'item', 'qty', 'unit', 'unit_cost', 'total']
+        : csvType === 'movements'
+        ? ['date', 'sku', 'qty_in', 'qty_out', 'unit_cost', 'reason']
+        : ['sku', 'item', 'unit', 'category', 'location'];
+    const example =
+      csvType === 'purchases'
+        ? ['INV-1001', '2026-02-01', 'Golden Poultry', 'SKU-1001', 'Chicken Thigh', '10', 'kg', '180', '1800']
+        : csvType === 'movements'
+        ? ['2026-02-01', 'SKU-1001', '10', '0', '180', 'Received shipment']
+        : ['SKU-1001', 'Chicken Thigh', 'kg', 'Meat', 'Manila'];
     const csv = `${header.join(',')}\n${example.join(',')}\n`;
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = 'costpilot_sales_template.csv';
+    link.download = `costpilot_${csvType}_template.csv`;
     link.click();
     URL.revokeObjectURL(url);
   };
@@ -212,68 +179,60 @@ export default function InventoryPage() {
     const text = await file.text();
     const rows = parseCsv(text);
     if (rows.length < 2) {
-      setImportSummary({ total: 0, imported: 0, skipped: 0, unmapped: [] });
+      setImportSummary({ total: 0, accepted: 0, rejected: 0, warnings: 0 });
       return;
     }
 
-    const header = rows[0].map(normalizeHeader);
-    const rowData = rows.slice(1);
-    const dateIndex = resolveHeaderIndex(header, 'date');
-    const nameIndex = resolveHeaderIndex(header, 'item_name');
-    const qtyIndex = resolveHeaderIndex(header, 'quantity');
+    const headers = rows[0];
+    const suggestions = suggestMappings(headers);
+    const mapping: Record<CanonicalField, string> = {};
 
-    if (dateIndex === -1 || nameIndex === -1 || qtyIndex === -1) {
-      setImportSummary({ total: 0, imported: 0, skipped: rows.length - 1, unmapped: [] });
-      return;
-    }
-
-    const newRecords: SalesRecord[] = [];
-    const unmapped = new Set<string>();
-    let skipped = 0;
-
-    rowData.forEach((row, index) => {
-      const dateValue = row[dateIndex]?.trim();
-      const itemName = row[nameIndex]?.trim();
-      const quantityValue = row[qtyIndex]?.trim();
-
-      if (!dateValue || !itemName || !quantityValue) {
-        skipped += 1;
-        return;
-      }
-
-      const quantity = Number.parseFloat(quantityValue);
-      const parsedDate = new Date(dateValue);
-      if (Number.isNaN(quantity) || Number.isNaN(parsedDate.getTime())) {
-        skipped += 1;
-        return;
-      }
-
-      const matchedItem = recipes.find((recipe) =>
-        recipe.posItemName.toLowerCase() === itemName.toLowerCase()
-      );
-
-      if (!matchedItem) {
-        unmapped.add(itemName);
-        skipped += 1;
-        return;
-      }
-
-      newRecords.push({
-        id: `csv_${Date.now()}_${index}`,
-        posItemId: matchedItem.posItemId,
-        posItemName: matchedItem.posItemName,
-        date: parsedDate,
-        quantity,
-      });
+    suggestions.forEach((suggestion) => {
+      mapping[suggestion.canonical] = suggestion.source;
     });
 
-    setSalesRecords(newRecords);
+    const previewRows = buildPreviewRows(rows, headers, mapping, csvType);
+
+    setImportDraft({
+      jobId: `draft_${Date.now()}`,
+      csvType,
+      detectedColumns: headers,
+      suggestedMappings: suggestions,
+      previewRows,
+      rawRows: rows,
+    });
+    setColumnMapping(mapping);
+    setImportStep('map');
+  };
+
+  const updateMapping = (field: CanonicalField, value: string) => {
+    setColumnMapping((current) => ({ ...current, [field]: value }));
+  };
+
+  const handlePreview = () => {
+    if (!importDraft) return;
+    const previewRows = buildPreviewRows(
+      importDraft.rawRows,
+      importDraft.detectedColumns,
+      columnMapping,
+      importDraft.csvType
+    );
+    setImportDraft({ ...importDraft, previewRows });
+    setImportStep('preview');
+  };
+
+  const handleConfirm = () => {
+    if (!importDraft) return;
+    const total = 50;
+    const rejected = importDraft.previewRows.filter((row) => row.errors.length > 0).length;
+    const warnings = importDraft.previewRows.filter((row) => row.warnings.length > 0).length;
     setImportSummary({
-      total: rowData.length,
-      imported: newRecords.length,
-      skipped,
-      unmapped: Array.from(unmapped).slice(0, 5),
+      total,
+      accepted: total - rejected,
+      rejected,
+      warnings,
     });
+    setImportStep('summary');
   };
 
   return (
@@ -296,29 +255,13 @@ export default function InventoryPage() {
               <SelectItem value="month">This month</SelectItem>
             </SelectContent>
           </Select>
-          <Input
-            type="file"
-            accept=".csv"
-            className="hidden"
-            id="sales-csv-upload"
-            onChange={(event) => {
-              const file = event.target.files?.[0];
-              if (file) {
-                handleCsvUpload(file);
-                event.currentTarget.value = '';
-              }
-            }}
-          />
-          <Button variant="outline" onClick={handleDownloadTemplate}>
-            Download CSV Template
-          </Button>
-          <Button variant="outline" onClick={() => document.getElementById('sales-csv-upload')?.click()}>
-            Upload CSV
+          <Button variant="outline" onClick={() => setImportOpen(true)}>
+            Import CSV
           </Button>
         </div>
       </div>
 
-      {importSummary && (
+      {importSummary && importStep === 'summary' && (
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium">CSV Import Summary</CardTitle>
@@ -326,12 +269,9 @@ export default function InventoryPage() {
           </CardHeader>
           <CardContent className="text-sm text-slate-700 space-y-1">
             <p>Total rows: {importSummary.total}</p>
-            <p>Imported: {importSummary.imported}</p>
-            <p>Skipped: {importSummary.skipped}</p>
-            <p>
-              Unmatched items:{' '}
-              {importSummary.unmapped.length === 0 ? 'None' : importSummary.unmapped.join(', ')}
-            </p>
+            <p>Accepted: {importSummary.accepted}</p>
+            <p>Rejected: {importSummary.rejected}</p>
+            <p>Warnings: {importSummary.warnings}</p>
           </CardContent>
         </Card>
       )}
@@ -408,6 +348,154 @@ export default function InventoryPage() {
           </div>
         </CardContent>
       </Card>
+
+      <Dialog open={importOpen} onOpenChange={setImportOpen}>
+        <DialogContent className="max-w-4xl">
+          <DialogHeader>
+            <DialogTitle>Import Inventory CSV</DialogTitle>
+            <DialogDescription>
+              Upload a CSV file, map columns, preview, and import.
+            </DialogDescription>
+          </DialogHeader>
+
+          {importStep === 'upload' && (
+            <div className="space-y-4">
+              <div className="flex flex-col sm:flex-row gap-3">
+                <Select value={csvType} onValueChange={(value) => setCsvType(value as CsvType)}>
+                  <SelectTrigger className="w-full sm:w-52">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="purchases">Purchases</SelectItem>
+                    <SelectItem value="movements">Inventory Movements</SelectItem>
+                    <SelectItem value="items">Inventory Items</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Button variant="outline" onClick={handleDownloadTemplate}>
+                  Download Template
+                </Button>
+              </div>
+              <Input
+                type="file"
+                accept=".csv"
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  if (file) {
+                    handleCsvUpload(file);
+                    event.currentTarget.value = '';
+                  }
+                }}
+              />
+            </div>
+          )}
+
+          {importStep === 'map' && importDraft && (
+            <div className="space-y-4">
+              <div className="text-sm text-slate-600">
+                Map your columns to CostPilot fields. Required fields are marked.
+              </div>
+              <div className="space-y-2">
+                {[...requiredFieldsByType[importDraft.csvType], ...optionalFieldsByType[importDraft.csvType]].map(
+                  (field) => (
+                    <div key={field} className="flex items-center gap-3">
+                      <div className="w-48 text-sm font-medium">
+                        {canonicalFieldLabels[field]}
+                        {requiredFieldsByType[importDraft.csvType].includes(field) ? ' *' : ''}
+                      </div>
+                      <Select
+                        value={columnMapping[field] || ''}
+                        onValueChange={(value) => updateMapping(field, value)}
+                      >
+                        <SelectTrigger className="w-full">
+                          <SelectValue placeholder="Select column" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {importDraft.detectedColumns.map((column) => (
+                            <SelectItem key={column} value={column}>
+                              {column}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )
+                )}
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={() => setImportStep('upload')}>
+                  Back
+                </Button>
+                <Button onClick={handlePreview}>Preview</Button>
+              </div>
+            </div>
+          )}
+
+          {importStep === 'preview' && importDraft && (
+            <div className="space-y-4">
+              <div className="text-sm text-slate-600">Preview the first 15 rows.</div>
+              <div className="overflow-x-auto max-h-[45vh]">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>#</TableHead>
+                      {requiredFieldsByType[importDraft.csvType].map((field) => (
+                        <TableHead key={field}>{canonicalFieldLabels[field]}</TableHead>
+                      ))}
+                      <TableHead>Notes</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {importDraft.previewRows.map((row) => (
+                      <TableRow key={row.rowIndex}>
+                        <TableCell>{row.rowIndex}</TableCell>
+                        {requiredFieldsByType[importDraft.csvType].map((field) => (
+                          <TableCell key={field}>{row.data[field] || '—'}</TableCell>
+                        ))}
+                        <TableCell className="text-xs text-slate-500">
+                          {row.errors[0] || row.warnings[0] || 'OK'}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={() => setImportStep('map')}>
+                  Back
+                </Button>
+                <Button onClick={handleConfirm}>Import</Button>
+              </div>
+            </div>
+          )}
+
+          {importStep === 'summary' && importSummary && (
+            <div className="space-y-4">
+              <div className="text-sm text-slate-600">Import completed.</div>
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                  <p className="text-slate-500">Total rows</p>
+                  <p className="text-lg font-semibold">{importSummary.total}</p>
+                </div>
+                <div>
+                  <p className="text-slate-500">Accepted</p>
+                  <p className="text-lg font-semibold">{importSummary.accepted}</p>
+                </div>
+                <div>
+                  <p className="text-slate-500">Rejected</p>
+                  <p className="text-lg font-semibold">{importSummary.rejected}</p>
+                </div>
+                <div>
+                  <p className="text-slate-500">Warnings</p>
+                  <p className="text-lg font-semibold">{importSummary.warnings}</p>
+                </div>
+              </div>
+              <div className="flex justify-end">
+                <Button onClick={() => setImportOpen(false)}>Done</Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

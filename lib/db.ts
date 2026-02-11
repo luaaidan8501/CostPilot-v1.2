@@ -12,12 +12,20 @@ import type {
   DashboardKPI,
   AnalyticsDataPoint,
   SalesRecord,
+  Receipt,
 } from './types';
 
+import { storage } from './storage';
+
 const salesListeners = new Set<() => void>();
+const receiptListeners = new Set<() => void>();
 
 function notifySalesListeners() {
   salesListeners.forEach((listener) => listener());
+}
+
+function notifyReceiptListeners() {
+  receiptListeners.forEach((listener) => listener());
 }
 
 interface DatabaseState {
@@ -29,6 +37,7 @@ interface DatabaseState {
   recipes: Map<string, Recipe>;
   posItems: Map<string, PosItem>;
   salesRecords: SalesRecord[];
+  receipts: Receipt[];
   alerts: Map<string, Alert>;
   dashboardKPI: DashboardKPI | null;
   analyticsData: AnalyticsDataPoint[];
@@ -45,6 +54,7 @@ let db: DatabaseState = {
   recipes: new Map(),
   posItems: new Map(),
   salesRecords: [],
+  receipts: [],
   alerts: new Map(),
   dashboardKPI: null,
   analyticsData: [],
@@ -296,9 +306,33 @@ export const salesDb = {
   },
 };
 
+// Receipts
+export const receiptDb = {
+  getAll: () => db.receipts,
+  set: (receipts: Receipt[]) => {
+    db.receipts = receipts;
+    if (typeof window !== 'undefined') {
+      storage.saveReceipts(receipts);
+    }
+    notifyReceiptListeners();
+  },
+  addMany: (receipts: Receipt[]) => {
+    db.receipts = [...db.receipts, ...receipts];
+    if (typeof window !== 'undefined') {
+      storage.saveReceipts(db.receipts);
+    }
+    notifyReceiptListeners();
+  },
+};
+
 export function subscribeToSales(listener: () => void) {
   salesListeners.add(listener);
   return () => salesListeners.delete(listener);
+}
+
+export function subscribeToReceipts(listener: () => void) {
+  receiptListeners.add(listener);
+  return () => receiptListeners.delete(listener);
 }
 
 // Alert operations
@@ -356,6 +390,7 @@ export function clearDatabase() {
     recipes: new Map(),
     posItems: new Map(),
     salesRecords: [],
+    receipts: [],
     alerts: new Map(),
     dashboardKPI: null,
     analyticsData: [],

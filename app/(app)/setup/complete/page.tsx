@@ -4,12 +4,13 @@ import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { CheckCircle2Icon } from '@/components/icons';
-import { usePosItems, useRecipes } from '@/lib/hooks';
+import { usePosItems, useRecipes, useSetSetupComplete } from '@/lib/hooks';
 
 export default function SetupCompletePage() {
   const router = useRouter();
   const { data: posItems } = usePosItems();
   const { data: recipes } = useRecipes();
+  const setSetupComplete = useSetSetupComplete();
 
   const completedRecipes = recipes.filter(r => posItems.find(p => p.id === r.posItemId)).length;
 
@@ -33,13 +34,19 @@ export default function SetupCompletePage() {
 
           <div className="space-y-3">
             <Button 
-              onClick={() => router.push('/dashboard')}
+              onClick={() => {
+                setSetupComplete(true);
+                router.push('/dashboard');
+              }}
               className="w-full bg-teal-600 hover:bg-teal-700 h-10"
             >
               Go to Dashboard
             </Button>
             <Button 
-              onClick={() => router.push('/purchases')}
+              onClick={() => {
+                setSetupComplete(true);
+                router.push('/purchases');
+              }}
               variant="outline"
               className="w-full h-10"
             >

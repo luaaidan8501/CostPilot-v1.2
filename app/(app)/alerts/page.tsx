@@ -1,12 +1,13 @@
 "use client"
 
 import { useState } from "react"
-import { useAlerts } from "@/lib/hooks"
+import { useAlerts, useIngredients } from "@/lib/hooks"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { AlertCircleIcon, AlertTriangleIcon, InfoIcon } from "@/components/icons"
+import { suggestIngredientAlternatives } from "@/lib/ai"
 
 export default function AlertsPage() {
   const [filterStatus, setFilterStatus] = useState("open")
@@ -16,6 +17,7 @@ export default function AlertsPage() {
     status: filterStatus as any,
     severity: filterSeverity || undefined,
   })
+  const { data: ingredients } = useIngredients()
 
   const getSeverityIcon = (severity: string) => {
     switch (severity) {
@@ -106,6 +108,36 @@ export default function AlertsPage() {
                     </Badge>
                   </div>
                   <p className="text-slate-700 mb-2 break-words">{alert.description}</p>
+                  {alert.type === "ingredient" && (
+                    <div className="bg-white/70 border border-slate-200 rounded-md p-3 mb-2">
+                      <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                        Smart Suggestions
+                      </p>
+                      {(() => {
+                        const ingredient = ingredients.find((item) => item.id === alert.relatedId)
+                        const suggestions = suggestIngredientAlternatives(ingredient, ingredients)
+                        if (suggestions.length === 0) {
+                          return (
+                            <p className="text-sm text-slate-600 mt-1">
+                              No suggestions yet. Add more ingredient benchmarks to improve results.
+                            </p>
+                          )
+                        }
+                        return (
+                          <div className="mt-2 space-y-1">
+                            {suggestions.map((suggestion) => (
+                              <p key={suggestion.name} className="text-sm text-slate-700">
+                                <span className="font-medium">{suggestion.name}</span> — {suggestion.reason}
+                              </p>
+                            ))}
+                            <p className="text-xs text-slate-500 mt-1">
+                              Rule-based suggestions (AI-ready).
+                            </p>
+                          </div>
+                        )
+                      })()}
+                    </div>
+                  )}
                   <p className="text-xs text-slate-500">{formatDate(alert.date)}</p>
                 </div>
                 <div className="flex gap-2 w-full md:w-auto flex-shrink-0">
