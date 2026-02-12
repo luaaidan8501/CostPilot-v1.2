@@ -565,16 +565,31 @@ export default function RecipesPosPage() {
         </CardContent>
       </Card>
 
-      {selectedPosItemId && editMode && (
-        <Card>
-          <CardHeader>
-            <CardTitle>
-              {posItems.find((p) => p.id === selectedPosItemId)?.name ||
-                "New Recipe"}
-            </CardTitle>
-            <CardDescription>Edit recipe details</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6">
+      <Dialog
+        open={Boolean(selectedPosItemId && editMode)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setEditMode(false);
+            setSelectedPosItemId(null);
+          }
+        }}
+      >
+        <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto p-0">
+          <DialogHeader className="sr-only">
+            <DialogTitle>Recipe Editor</DialogTitle>
+            <DialogDescription>
+              Update selling price, category, and ingredient composition.
+            </DialogDescription>
+          </DialogHeader>
+          <Card className="border-0 shadow-none">
+            <CardHeader>
+              <CardTitle>
+                {posItems.find((p) => p.id === selectedPosItemId)?.name ||
+                  "New Recipe"}
+              </CardTitle>
+              <CardDescription>Edit recipe details</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
                 {/* Selling Price */}
                 <div className="space-y-2">
                   <Label htmlFor="sellingPrice">Selling Price (₱)</Label>
@@ -805,9 +820,10 @@ export default function RecipesPosPage() {
                     Cancel
                   </Button>
                 </div>
-              </CardContent>
-            </Card>
-      )}
+            </CardContent>
+          </Card>
+        </DialogContent>
+      </Dialog>
 
       {/* Add New Ingredient Dialog */}
       <Dialog
