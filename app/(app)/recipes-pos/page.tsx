@@ -4,6 +4,7 @@ import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import {
   usePosItems,
   useRecipes,
+  useSavePosItem,
   useSaveRecipe,
   useUpdateRecipe,
   useUpdatePosItem,
@@ -37,7 +38,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { ChevronDownIcon, PlusIcon, TrashIcon } from "@/components/icons";
-import type { Recipe, RecipeIngredient, Ingredient } from "@/lib/types";
+import type { Recipe, RecipeIngredient, Ingredient, PosItem } from "@/lib/types";
 
 function hashString(value: string) {
   let hash = 0;
@@ -69,6 +70,7 @@ export default function RecipesPosPage() {
     null
   );
   const [editMode, setEditMode] = useState(false);
+  const [showAddDishDialog, setShowAddDishDialog] = useState(false);
   const [showAddIngredientDialog, setShowAddIngredientDialog] = useState(false);
   const [expandedRowId, setExpandedRowId] = useState<string | null>(null);
   const [categoryFilter, setCategoryFilter] = useState("All");
@@ -80,6 +82,7 @@ export default function RecipesPosPage() {
   const { data: recipes } = useRecipes();
   const { data: ingredients } = useIngredients();
   const saveRecipe = useSaveRecipe();
+  const savePosItem = useSavePosItem();
   const updateRecipe = useUpdateRecipe();
   const updatePosItem = useUpdatePosItem();
   const saveIngredient = useSaveIngredient();
@@ -100,6 +103,12 @@ export default function RecipesPosPage() {
       | "Others",
     unit: "kg" as "kg" | "g" | "L" | "mL" | "pc",
     lastPurchasePrice: "",
+  });
+
+  const [newDishForm, setNewDishForm] = useState({
+    name: "",
+    category: "Mains",
+    sellingPrice: "",
   });
 
   // Form state for creating/editing recipes
@@ -297,6 +306,39 @@ export default function RecipesPosPage() {
     }
   };
 
+  const handleSaveNewDish = async () => {
+    if (!newDishForm.name || !newDishForm.sellingPrice) return;
+    const parsedPrice = parseFloat(newDishForm.sellingPrice);
+    if (Number.isNaN(parsedPrice) || parsedPrice <= 0) {
+      alert("Please enter a valid selling price");
+      return;
+    }
+
+    const newDish: PosItem = {
+      id: `dish_${Date.now()}`,
+      name: newDishForm.name,
+      category: newDishForm.category,
+      sellingPrice: parsedPrice,
+      hasRecipe: false,
+    };
+
+    try {
+      await savePosItem(newDish);
+      setShowAddDishDialog(false);
+      setNewDishForm({
+        name: "",
+        category: "Mains",
+        sellingPrice: "",
+      });
+    } catch (error) {
+      alert(
+        error instanceof Error
+          ? `Failed to save dish: ${error.message}`
+          : "Failed to save dish"
+      );
+    }
+  };
+
   const handleSaveRecipe = () => {
     if (!selectedPosItemId || !formData.sellingPrice) return;
 
@@ -367,6 +409,13 @@ export default function RecipesPosPage() {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex flex-wrap items-center gap-3">
+            <Button
+              onClick={() => setShowAddDishDialog(true)}
+              className="bg-slate-900 hover:bg-slate-800 text-white"
+            >
+              <PlusIcon className="w-4 h-4 mr-2" />
+              Add Dish
+            </Button>
             <Button
               onClick={() => setShowAddIngredientDialog(true)}
               className="bg-teal-600 hover:bg-teal-700 text-white"
@@ -837,6 +886,98 @@ export default function RecipesPosPage() {
                 </div>
             </CardContent>
           </Card>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add New Ingredient Dialog */}
+      <Dialog
+        open={showAddDishDialog}
+        onOpenChange={setShowAddDishDialog}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add New Dish</DialogTitle>
+            <DialogDescription>
+              Create a new menu item in Dish Information
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="dishName">Dish Name</Label>
+              <Input
+                id="dishName"
+                placeholder="e.g., Beef Salpicao"
+                value={newDishForm.name}
+                onChange={(e) =>
+                  setNewDishForm({
+                    ...newDishForm,
+                    name: e.target.value,
+                  })
+                }
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="dishCategory">Category</Label>
+              <Select
+                value={newDishForm.category}
+                onValueChange={(value) =>
+                  setNewDishForm({
+                    ...newDishForm,
+                    category: value,
+                  })
+                }
+              >
+                <SelectTrigger id="dishCategory">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Mains">Mains</SelectItem>
+                  <SelectItem value="Appetizers">Appetizers</SelectItem>
+                  <SelectItem value="Sides">Sides</SelectItem>
+                  <SelectItem value="Drinks">Drinks</SelectItem>
+                  <SelectItem value="Desserts">Desserts</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="dishSellingPrice">Selling Price (₱)</Label>
+              <Input
+                id="dishSellingPrice"
+                type="number"
+                step="0.01"
+                placeholder="e.g., 250"
+                value={newDishForm.sellingPrice}
+                onChange={(e) =>
+                  setNewDishForm({
+                    ...newDishForm,
+                    sellingPrice: e.target.value,
+                  })
+                }
+              />
+            </div>
+          </div>
+          <div className="flex gap-3">
+            <Button
+              onClick={handleSaveNewDish}
+              className="flex-1 bg-slate-900 hover:bg-slate-800"
+            >
+              Add Dish
+            </Button>
+            <Button
+              onClick={() => {
+                setShowAddDishDialog(false);
+                setNewDishForm({
+                  name: "",
+                  category: "Mains",
+                  sellingPrice: "",
+                });
+              }}
+              variant="outline"
+              className="flex-1"
+            >
+              Cancel
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
 
