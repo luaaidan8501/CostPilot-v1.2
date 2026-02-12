@@ -6,7 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { useIngredients, useRecipes, useSalesRecords, useSetSalesRecords } from '@/lib/hooks';
+import { useIngredients, usePosItems, useRecipes, useSalesRecords, useSetSalesRecords } from '@/lib/hooks';
 import type { SalesRecord } from '@/lib/types';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
@@ -96,6 +96,7 @@ export default function InventoryPage() {
   const dateRange = useMemo(() => getDateRange(rangeOption), [rangeOption]);
 
   const { data: ingredients } = useIngredients();
+  const { data: posItems } = usePosItems();
   const { data: recipes } = useRecipes();
   const { data: salesRecords } = useSalesRecords(dateRange);
   const setSalesRecords = useSetSalesRecords();
