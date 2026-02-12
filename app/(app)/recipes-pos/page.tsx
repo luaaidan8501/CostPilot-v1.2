@@ -366,7 +366,14 @@ export default function RecipesPosPage() {
           <CardDescription>Click a dish to view ingredient details.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex flex-wrap gap-3">
+          <div className="flex flex-wrap items-center gap-3">
+            <Button
+              onClick={() => setShowAddIngredientDialog(true)}
+              className="bg-teal-600 hover:bg-teal-700 text-white"
+            >
+              <PlusIcon className="w-4 h-4 mr-2" />
+              Add Ingredient
+            </Button>
             <Select
               value={sortOption}
               onValueChange={(value) =>
