@@ -1425,7 +1425,7 @@ export function useSaveIngredient() {
     }
 
     const restaurantId = await getSupabaseRestaurantId();
-    await supabaseClient.from('ingredients').insert({
+    const { error } = await supabaseClient.from('ingredients').insert({
       restaurant_id: restaurantId,
       name: ingredient.name,
       category: ingredient.category,
@@ -1436,6 +1436,10 @@ export function useSaveIngredient() {
       price_trend: ingredient.priceTrend,
       current_stock: ingredient.currentStock,
     });
+
+    if (error) {
+      throw new Error(error.message);
+    }
 
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new Event('costpilot-ingredients-refresh'));

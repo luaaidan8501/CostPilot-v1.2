@@ -264,7 +264,7 @@ export default function RecipesPosPage() {
     });
   };
 
-  const handleSaveNewIngredient = () => {
+  const handleSaveNewIngredient = async () => {
     if (!newIngredientForm.name || !newIngredientForm.lastPurchasePrice) return;
 
     const newIngredient: Ingredient = {
@@ -279,14 +279,22 @@ export default function RecipesPosPage() {
       currentStock: 0,
     };
 
-    saveIngredient(newIngredient);
-    setShowAddIngredientDialog(false);
-    setNewIngredientForm({
-      name: "",
-      category: "Meat",
-      unit: "kg",
-      lastPurchasePrice: "",
-    });
+    try {
+      await saveIngredient(newIngredient);
+      setShowAddIngredientDialog(false);
+      setNewIngredientForm({
+        name: "",
+        category: "Meat",
+        unit: "kg",
+        lastPurchasePrice: "",
+      });
+    } catch (error) {
+      alert(
+        error instanceof Error
+          ? `Failed to save ingredient: ${error.message}`
+          : "Failed to save ingredient"
+      );
+    }
   };
 
   const handleSaveRecipe = () => {
