@@ -4,7 +4,6 @@ import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import {
   usePosItems,
   useRecipes,
-  useRecipeByPosItem,
   useSaveRecipe,
   useUpdateRecipe,
   useUpdatePosItem,
@@ -80,11 +79,14 @@ export default function RecipesPosPage() {
   const { data: posItems } = usePosItems();
   const { data: recipes } = useRecipes();
   const { data: ingredients } = useIngredients();
-  const { data: recipe } = useRecipeByPosItem(selectedPosItemId || "");
   const saveRecipe = useSaveRecipe();
   const updateRecipe = useUpdateRecipe();
   const updatePosItem = useUpdatePosItem();
   const saveIngredient = useSaveIngredient();
+  const selectedRecipe = useMemo(
+    () => recipes.find((item) => item.posItemId === selectedPosItemId),
+    [recipes, selectedPosItemId]
+  );
 
   // New ingredient form state
   const [newIngredientForm, setNewIngredientForm] = useState({
@@ -147,18 +149,18 @@ export default function RecipesPosPage() {
     );
     setFormData({
       sellingPrice:
-        recipe?.sellingPrice.toString() ||
+        selectedRecipe?.sellingPrice.toString() ||
         selectedItem?.sellingPrice.toString() ||
         "",
       category: selectedItem?.category || "",
-      ingredients: recipe?.ingredients || [],
+      ingredients: selectedRecipe?.ingredients || [],
       newIngredient: {
         ingredientId: "",
         quantityPerPortion: "",
         selectedUnit: "kg",
       },
     });
-  }, [recipe, selectedPosItemId]);
+  }, [selectedRecipe, selectedPosItemId]);
 
   const categories = useMemo(() => {
     const unique = new Set(posItems.map((item) => item.category).filter(Boolean));
@@ -303,7 +305,7 @@ export default function RecipesPosPage() {
         : 0;
 
     const newRecipe: Recipe = {
-      id: recipe?.id || `recipe_${Date.now()}`,
+      id: selectedRecipe?.id || `recipe_${Date.now()}`,
       posItemId: selectedPosItemId,
       posItemName: selectedItem.name,
       sellingPrice: parseFloat(formData.sellingPrice),
@@ -312,8 +314,8 @@ export default function RecipesPosPage() {
       foodCostPercentage,
     };
 
-    if (recipe) {
-      updateRecipe(recipe.id, newRecipe);
+    if (selectedRecipe) {
+      updateRecipe(selectedRecipe.id, newRecipe);
     } else {
       saveRecipe(newRecipe);
     }
@@ -520,6 +522,7 @@ export default function RecipesPosPage() {
                                   variant="outline"
                                   onClick={() => {
                                     setSelectedPosItemId(row.id);
+                                    setExpandedRowId(row.id);
                                     setEditMode(true);
                                   }}
                                 >
@@ -535,6 +538,7 @@ export default function RecipesPosPage() {
                               <Button
                                 onClick={() => {
                                   setSelectedPosItemId(row.id);
+                                  setExpandedRowId(row.id);
                                   setEditMode(true);
                                 }}
                                 className="bg-teal-600 hover:bg-teal-700"

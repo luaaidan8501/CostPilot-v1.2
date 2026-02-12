@@ -100,11 +100,12 @@ export default function InventoryPage() {
   const { data: salesRecords } = useSalesRecords(dateRange);
   const setSalesRecords = useSetSalesRecords();
 
-  const { usageRows, totalServings, estimatedCost } = useMemo(() => {
+  const { usageRows, totalServings, estimatedCost, dishRows } = useMemo(() => {
     const usageMap = new Map<
       string,
       { ingredientName: string; unit: string; totalQty: number; totalCost: number }
     >();
+    const dishMap = new Map<string, { name: string; servings: number }>();
     let servings = 0;
     let cost = 0;
 
@@ -113,6 +114,16 @@ export default function InventoryPage() {
       if (!recipe) return;
 
       servings += record.quantity;
+      const dishName =
+        posItems.find((item) => item.id === record.posItemId)?.name ||
+        record.posItemName;
+      const dishEntry = dishMap.get(record.posItemId);
+      if (dishEntry) {
+        dishEntry.servings += record.quantity;
+      } else {
+        dishMap.set(record.posItemId, { name: dishName, servings: record.quantity });
+      }
+
       recipe.ingredients.forEach((ing) => {
         const totalQty = record.quantity * ing.quantityPerPortion;
         const totalCost = totalQty * ing.costPerUnit;
@@ -149,8 +160,12 @@ export default function InventoryPage() {
       cost += row.totalCost;
     });
 
-    return { usageRows: rows, totalServings: servings, estimatedCost: cost };
-  }, [ingredients, recipes, salesRecords]);
+    const dishRows = Array.from(dishMap.entries())
+      .map(([id, data]) => ({ id, name: data.name, servings: data.servings }))
+      .sort((a, b) => b.servings - a.servings);
+
+    return { usageRows: rows, totalServings: servings, estimatedCost: cost, dishRows };
+  }, [ingredients, recipes, salesRecords, posItems]);
 
   const handleDownloadTemplate = () => {
     const header =
@@ -340,6 +355,41 @@ export default function InventoryPage() {
                       <TableCell className="text-right">
                         {row.benchmarkPrice === null ? '—' : `₱ ${row.benchmarkPrice}`}
                       </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Dish Servings</CardTitle>
+          <CardDescription>Servings sold per dish in this range</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Dish</TableHead>
+                  <TableHead className="text-right">Servings Sold</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {dishRows.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={2} className="text-center text-slate-500">
+                      No sales data in this range
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  dishRows.map((row) => (
+                    <TableRow key={row.id}>
+                      <TableCell className="font-medium">{row.name}</TableCell>
+                      <TableCell className="text-right">{row.servings}</TableCell>
                     </TableRow>
                   ))
                 )}
