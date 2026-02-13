@@ -59,8 +59,13 @@ import type {
 // Initialize database on first hook call
 let dbInitialized = false;
 const useSupabase = Boolean(supabaseClient);
+const djangoBaseUrl = (process.env.NEXT_PUBLIC_DJANGO_API_URL || '').replace(/\/$/, '');
+const useDjango = process.env.NEXT_PUBLIC_BACKEND_PROVIDER === 'django' && Boolean(djangoBaseUrl);
+const useRemoteData = useSupabase || useDjango;
 const RESTAURANT_ID_STORAGE_KEY = 'costpilot-restaurant-id';
+const DJANGO_RESTAURANT_ID_STORAGE_KEY = 'costpilot-django-restaurant-id';
 let supabaseRestaurantIdPromise: Promise<string> | null = null;
+let djangoRestaurantIdPromise: Promise<string> | null = null;
 
 function ensureDbInitialized() {
   if (!dbInitialized) {
@@ -97,6 +102,63 @@ function isUuid(value: string) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
     value
   );
+}
+
+async function djangoRequest<T>(path: string, init?: RequestInit): Promise<T> {
+  if (!djangoBaseUrl) {
+    throw new Error('Django API URL missing. Set NEXT_PUBLIC_DJANGO_API_URL.');
+  }
+
+  const response = await fetch(`${djangoBaseUrl}${path}`, {
+    headers: {
+      'Content-Type': 'application/json',
+      ...(init?.headers || {}),
+    },
+    ...init,
+  });
+
+  if (!response.ok) {
+    const message = await response.text();
+    throw new Error(message || `Django request failed: ${response.status}`);
+  }
+
+  return (await response.json()) as T;
+}
+
+async function getDjangoRestaurantId() {
+  if (typeof window === 'undefined') {
+    throw new Error('Django restaurant id requires browser context');
+  }
+
+  const cached = window.localStorage.getItem(DJANGO_RESTAURANT_ID_STORAGE_KEY);
+  if (cached) return cached;
+
+  if (!djangoRestaurantIdPromise) {
+    djangoRestaurantIdPromise = (async () => {
+      const rows = await djangoRequest<Array<{ id: number }>>('/api/v1/restaurants/');
+      if (rows.length > 0) {
+        const id = String(rows[0].id);
+        window.localStorage.setItem(DJANGO_RESTAURANT_ID_STORAGE_KEY, id);
+        return id;
+      }
+
+      const created = await djangoRequest<{ id: number }>('/api/v1/restaurants/', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: seedRestaurant.name,
+          region: seedRestaurant.region,
+          city: seedRestaurant.city,
+          target_food_cost_percentage: seedRestaurant.targetFoodCostPercentage,
+        }),
+      });
+
+      const id = String(created.id);
+      window.localStorage.setItem(DJANGO_RESTAURANT_ID_STORAGE_KEY, id);
+      return id;
+    })();
+  }
+
+  return djangoRestaurantIdPromise;
 }
 
 async function getSupabaseRestaurantId() {
@@ -301,6 +363,20 @@ function mapIngredientRow(row: any): Ingredient {
   };
 }
 
+function mapDjangoIngredientRow(row: any): Ingredient {
+  return {
+    id: String(row.id),
+    name: row.name,
+    category: row.category ?? 'Others',
+    unit: row.unit ?? 'kg',
+    lastPurchasePrice: Number(row.last_purchase_price ?? 0),
+    benchmarkPrice: Number(row.benchmark_price ?? 0),
+    lastPurchasedDate: row.updated_at ? new Date(row.updated_at) : new Date(),
+    priceTrend: [Number(row.last_purchase_price ?? 0)],
+    currentStock: Number(row.current_stock ?? 0),
+  };
+}
+
 function mapPurchaseRow(row: any): Purchase {
   return {
     id: row.id,
@@ -320,6 +396,16 @@ function mapPurchaseRow(row: any): Purchase {
 function mapPosItemRow(row: any): PosItem {
   return {
     id: row.id,
+    name: row.name,
+    category: row.category ?? '',
+    sellingPrice: Number(row.selling_price ?? 0),
+    hasRecipe: Boolean(row.has_recipe),
+  };
+}
+
+function mapDjangoDishRow(row: any): PosItem {
+  return {
+    id: String(row.id),
     name: row.name,
     category: row.category ?? '',
     sellingPrice: Number(row.selling_price ?? 0),
@@ -500,9 +586,42 @@ export function useIngredients(filters?: {
   const [data, setData] = useState<Ingredient[]>(() =>
     useSupabase ? [] : ingredientDb.getAll()
   );
-  const [isLoading, setIsLoading] = useState(useSupabase);
+  const [isLoading, setIsLoading] = useState(useRemoteData);
 
   useEffect(() => {
+    if (useDjango) {
+      let active = true;
+
+      const fetchIngredients = async () => {
+        try {
+          const restaurantId = await getDjangoRestaurantId();
+          const rows = await djangoRequest<Array<any>>(
+            `/api/v1/ingredients/?restaurant=${restaurantId}`
+          );
+          if (active) {
+            setData(rows.map(mapDjangoIngredientRow));
+          }
+        } catch (error) {
+          console.error('[useIngredients] Django error', error);
+          if (active) {
+            setData(ingredientDb.getAll());
+          }
+        } finally {
+          if (active) {
+            setIsLoading(false);
+          }
+        }
+      };
+
+      fetchIngredients();
+      const handleRefresh = () => fetchIngredients();
+      window.addEventListener('costpilot-ingredients-refresh', handleRefresh);
+      return () => {
+        active = false;
+        window.removeEventListener('costpilot-ingredients-refresh', handleRefresh);
+      };
+    }
+
     if (!useSupabase || !supabaseClient) return;
     let active = true;
 
@@ -571,9 +690,35 @@ export function useIngredientDetails(ingredientId: string) {
   const [data, setData] = useState<Ingredient | null>(() =>
     useSupabase ? null : ingredientDb.getById(ingredientId)
   );
-  const [isLoading, setIsLoading] = useState(useSupabase);
+  const [isLoading, setIsLoading] = useState(useRemoteData);
 
   useEffect(() => {
+    if (useDjango) {
+      let active = true;
+
+      (async () => {
+        try {
+          const row = await djangoRequest<any>(`/api/v1/ingredients/${ingredientId}/`);
+          if (active) {
+            setData(mapDjangoIngredientRow(row));
+          }
+        } catch (error) {
+          console.error('[useIngredientDetails] Django error', error);
+          if (active) {
+            setData(ingredientDb.getById(ingredientId));
+          }
+        } finally {
+          if (active) {
+            setIsLoading(false);
+          }
+        }
+      })();
+
+      return () => {
+        active = false;
+      };
+    }
+
     if (!useSupabase || !supabaseClient) return;
     let active = true;
 
@@ -797,9 +942,42 @@ export function usePosItems(filters?: { hasRecipe?: boolean }) {
   const [data, setData] = useState<PosItem[]>(() =>
     useSupabase ? [] : posItemDb.getAll()
   );
-  const [isLoading, setIsLoading] = useState(useSupabase);
+  const [isLoading, setIsLoading] = useState(useRemoteData);
 
   useEffect(() => {
+    if (useDjango) {
+      let active = true;
+
+      const fetchPosItems = async () => {
+        try {
+          const restaurantId = await getDjangoRestaurantId();
+          const rows = await djangoRequest<Array<any>>(
+            `/api/v1/dishes/?restaurant=${restaurantId}`
+          );
+          if (active) {
+            setData(rows.map(mapDjangoDishRow));
+          }
+        } catch (error) {
+          console.error('[usePosItems] Django error', error);
+          if (active) {
+            setData(posItemDb.getAll());
+          }
+        } finally {
+          if (active) {
+            setIsLoading(false);
+          }
+        }
+      };
+
+      fetchPosItems();
+      const handleRefresh = () => fetchPosItems();
+      window.addEventListener('costpilot-positems-refresh', handleRefresh);
+      return () => {
+        active = false;
+        window.removeEventListener('costpilot-positems-refresh', handleRefresh);
+      };
+    }
+
     if (!useSupabase || !supabaseClient) return;
     let active = true;
 
@@ -1371,6 +1549,25 @@ export function useUpdateRecipe() {
 export function useSavePosItem() {
   ensureDbInitialized();
   return useCallback(async (posItem: PosItem) => {
+    if (useDjango) {
+      const restaurantId = await getDjangoRestaurantId();
+      await djangoRequest('/api/v1/dishes/', {
+        method: 'POST',
+        body: JSON.stringify({
+          restaurant: Number(restaurantId),
+          name: posItem.name,
+          category: posItem.category ?? 'Mains',
+          selling_price: posItem.sellingPrice,
+          has_recipe: posItem.hasRecipe,
+        }),
+      });
+
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('costpilot-positems-refresh'));
+      }
+      return;
+    }
+
     if (!useSupabase || !supabaseClient) {
       posItemDb.add(posItem);
       return;
@@ -1394,6 +1591,23 @@ export function useSavePosItem() {
 export function useUpdatePosItem() {
   ensureDbInitialized();
   return useCallback(async (id: string, posItem: Partial<PosItem>) => {
+    if (useDjango) {
+      await djangoRequest(`/api/v1/dishes/${id}/`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          name: posItem.name,
+          category: posItem.category,
+          selling_price: posItem.sellingPrice,
+          has_recipe: posItem.hasRecipe,
+        }),
+      });
+
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('costpilot-positems-refresh'));
+      }
+      return;
+    }
+
     if (!useSupabase || !supabaseClient) {
       posItemDb.update(id, posItem);
       return;
@@ -1419,6 +1633,27 @@ export function useUpdatePosItem() {
 export function useSaveIngredient() {
   ensureDbInitialized();
   return useCallback(async (ingredient: Ingredient) => {
+    if (useDjango) {
+      const restaurantId = await getDjangoRestaurantId();
+      await djangoRequest('/api/v1/ingredients/', {
+        method: 'POST',
+        body: JSON.stringify({
+          restaurant: Number(restaurantId),
+          name: ingredient.name,
+          category: ingredient.category,
+          unit: ingredient.unit,
+          last_purchase_price: ingredient.lastPurchasePrice,
+          benchmark_price: ingredient.benchmarkPrice,
+          current_stock: ingredient.currentStock,
+        }),
+      });
+
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('costpilot-ingredients-refresh'));
+      }
+      return;
+    }
+
     if (!useSupabase || !supabaseClient) {
       ingredientDb.add(ingredient);
       return;
