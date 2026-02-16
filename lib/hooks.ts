@@ -393,6 +393,22 @@ function mapPurchaseRow(row: any): Purchase {
   };
 }
 
+function mapDjangoPurchaseRow(row: any): Purchase {
+  return {
+    id: String(row.id),
+    date: row.date ? new Date(row.date) : new Date(),
+    ingredientId: row.ingredient ? String(row.ingredient) : '',
+    ingredientName: row.ingredient_name ?? '',
+    quantity: Number(row.quantity ?? 0),
+    unit: row.unit ?? 'kg',
+    totalPrice: Number(row.total_price ?? 0),
+    unitPrice: Number(row.unit_price ?? 0),
+    supplierId: row.supplier_id ?? '',
+    supplier: row.supplier ?? '',
+    type: row.type ?? 'Regular',
+  };
+}
+
 function mapPosItemRow(row: any): PosItem {
   return {
     id: row.id,
@@ -471,9 +487,19 @@ function mapSalesRow(row: any): SalesRecord {
   };
 }
 
+function mapDjangoSalesRow(row: any): SalesRecord {
+  return {
+    id: String(row.id),
+    posItemId: row.dish ? String(row.dish) : '',
+    posItemName: row.dish_name ?? '',
+    date: row.date ? new Date(row.date) : new Date(),
+    quantity: Number(row.quantity ?? 0),
+  };
+}
+
 function mapReceiptRow(row: any): Receipt {
   return {
-    id: row.id,
+    id: String(row.id),
     fileName: row.file_name ?? '',
     fileUrl: row.file_url ?? undefined,
     uploadedAt: row.uploaded_at ? new Date(row.uploaded_at) : new Date(),
@@ -789,9 +815,48 @@ export function usePurchases(dateRange?: { start: Date; end: Date }) {
   const [data, setData] = useState<Purchase[]>(() =>
     useSupabase ? [] : purchaseDb.getAll()
   );
-  const [isLoading, setIsLoading] = useState(useSupabase);
+  const [isLoading, setIsLoading] = useState(useRemoteData);
 
   useEffect(() => {
+    if (useDjango) {
+      let active = true;
+
+      const fetchPurchases = async () => {
+        try {
+          const restaurantId = await getDjangoRestaurantId();
+          const rows = await djangoRequest<Array<any>>(
+            `/api/v1/purchases/?restaurant=${restaurantId}`
+          );
+
+          if (active) {
+            setData(rows.map(mapDjangoPurchaseRow));
+          }
+        } catch (error) {
+          console.error('[usePurchases] Django error', error);
+          if (active) {
+            setData(purchaseDb.getAll());
+          }
+        } finally {
+          if (active) {
+            setIsLoading(false);
+          }
+        }
+      };
+
+      fetchPurchases();
+
+      const handleRefresh = () => {
+        fetchPurchases();
+      };
+
+      window.addEventListener('costpilot-purchases-refresh', handleRefresh);
+
+      return () => {
+        active = false;
+        window.removeEventListener('costpilot-purchases-refresh', handleRefresh);
+      };
+    }
+
     if (!useSupabase || !supabaseClient) return;
     let active = true;
 
@@ -1128,12 +1193,45 @@ export function usePosItems(filters?: { hasRecipe?: boolean }) {
 
 export function useSalesRecords(dateRange?: { start: Date; end: Date }) {
   ensureDbInitialized();
-  const [isLoading, setIsLoading] = useState(useSupabase);
+  const [isLoading, setIsLoading] = useState(useRemoteData);
   const [allRecords, setAllRecords] = useState<SalesRecord[]>(() =>
     useSupabase ? [] : salesDb.getAll()
   );
 
   useEffect(() => {
+    if (useDjango) {
+      let active = true;
+      const fetchSalesRecords = async () => {
+        try {
+          const restaurantId = await getDjangoRestaurantId();
+          const rows = await djangoRequest<Array<any>>(
+            `/api/v1/sales-records/?restaurant=${restaurantId}`
+          );
+
+          if (active) {
+            setAllRecords(rows.map(mapDjangoSalesRow));
+          }
+        } catch (error) {
+          console.error('[useSalesRecords] Django error', error);
+          if (active) {
+            setAllRecords(salesDb.getAll());
+          }
+        } finally {
+          if (active) {
+            setIsLoading(false);
+          }
+        }
+      };
+
+      fetchSalesRecords();
+      const handleRefresh = () => fetchSalesRecords();
+      window.addEventListener('costpilot-sales-refresh', handleRefresh);
+      return () => {
+        active = false;
+        window.removeEventListener('costpilot-sales-refresh', handleRefresh);
+      };
+    }
+
     if (!useSupabase || !supabaseClient) {
       const update = () => setAllRecords(salesDb.getAll());
       update();
@@ -1189,6 +1287,40 @@ export function useSalesRecords(dateRange?: { start: Date; end: Date }) {
 export function useSetSalesRecords() {
   ensureDbInitialized();
   return useCallback(async (records: SalesRecord[]) => {
+    if (useDjango) {
+      const restaurantId = await getDjangoRestaurantId();
+      const existing = await djangoRequest<Array<any>>(
+        `/api/v1/sales-records/?restaurant=${restaurantId}`
+      );
+      await Promise.all(
+        existing.map((row) =>
+          djangoRequest(`/api/v1/sales-records/${row.id}/`, { method: 'DELETE' })
+        )
+      );
+
+      if (records.length > 0) {
+        await Promise.all(
+          records.map((record) =>
+            djangoRequest('/api/v1/sales-records/', {
+              method: 'POST',
+              body: JSON.stringify({
+                restaurant: Number(restaurantId),
+                dish: record.posItemId ? Number(record.posItemId) : null,
+                dish_name: record.posItemName,
+                date: record.date?.toISOString?.() ?? new Date().toISOString(),
+                quantity: record.quantity,
+              }),
+            })
+          )
+        );
+      }
+
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('costpilot-sales-refresh'));
+      }
+      return;
+    }
+
     if (!useSupabase || !supabaseClient) {
       salesDb.set(records);
       return;
@@ -1216,9 +1348,9 @@ export function useSetSalesRecords() {
 
 export function useReceipts() {
   ensureDbInitialized();
-  const [isLoading, setIsLoading] = useState(useSupabase);
+  const [isLoading, setIsLoading] = useState(useRemoteData);
   const [receipts, setReceipts] = useState<Receipt[]>(() =>
-    useSupabase ? [] : receiptDb.getAll()
+    useRemoteData ? [] : receiptDb.getAll()
   );
   const hasHydratedRef = useRef(false);
 
@@ -1231,9 +1363,48 @@ export function useReceipts() {
       hasHydratedRef.current = true;
     }
 
+    if (useDjango) {
+      let active = true;
+
+      const fetchReceipts = async () => {
+        try {
+          const restaurantId = await getDjangoRestaurantId();
+          const rows = await djangoFetch<any[]>(
+            `/api/v1/receipts/?restaurant=${encodeURIComponent(restaurantId)}`
+          );
+          if (active) {
+            setReceipts((rows ?? []).map(mapReceiptRow));
+          }
+        } catch (error) {
+          console.error('[useReceipts] Django error', error);
+          if (active) {
+            setReceipts(receiptDb.getAll());
+          }
+        } finally {
+          if (active) {
+            setIsLoading(false);
+          }
+        }
+      };
+
+      fetchReceipts();
+
+      const handleRefresh = () => {
+        fetchReceipts();
+      };
+
+      window.addEventListener('costpilot-receipts-refresh', handleRefresh);
+
+      return () => {
+        active = false;
+        window.removeEventListener('costpilot-receipts-refresh', handleRefresh);
+      };
+    }
+
     if (!useSupabase || !supabaseClient) {
       const update = () => setReceipts(receiptDb.getAll());
       update();
+      setIsLoading(false);
       return subscribeToReceipts(update);
     }
 
@@ -1291,6 +1462,29 @@ export function useReceipts() {
 export function useAddReceipts() {
   ensureDbInitialized();
   return useCallback(async (receipts: Receipt[]) => {
+    if (useDjango) {
+      const restaurantId = await getDjangoRestaurantId();
+      for (const receipt of receipts) {
+        await djangoFetch('/api/v1/receipts/', {
+          method: 'POST',
+          body: JSON.stringify({
+            restaurant: Number(restaurantId),
+            file_name: receipt.fileName,
+            file_url: receipt.fileUrl ?? '',
+            uploaded_at: receipt.uploadedAt?.toISOString?.() ?? new Date().toISOString(),
+            receipt_date: receipt.receiptDate?.toISOString?.() ?? null,
+            week_start: receipt.weekStart?.toISOString?.() ?? new Date().toISOString(),
+            items: receipt.items ?? [],
+          }),
+        });
+      }
+
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('costpilot-receipts-refresh'));
+      }
+      return;
+    }
+
     if (!useSupabase || !supabaseClient) {
       receiptDb.addMany(receipts);
       return;
@@ -1560,6 +1754,31 @@ export function useSaveRestaurant() {
 export function useSavePurchase() {
   ensureDbInitialized();
   return useCallback(async (purchase: Purchase) => {
+    if (useDjango) {
+      const restaurantId = await getDjangoRestaurantId();
+      await djangoRequest('/api/v1/purchases/', {
+        method: 'POST',
+        body: JSON.stringify({
+          restaurant: Number(restaurantId),
+          date: purchase.date?.toISOString?.() ?? new Date().toISOString(),
+          ingredient: purchase.ingredientId ? Number(purchase.ingredientId) : null,
+          ingredient_name: purchase.ingredientName,
+          quantity: purchase.quantity,
+          unit: purchase.unit,
+          total_price: purchase.totalPrice,
+          unit_price: purchase.unitPrice,
+          supplier_id: purchase.supplierId,
+          supplier: purchase.supplier,
+          type: purchase.type,
+        }),
+      });
+
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('costpilot-purchases-refresh'));
+      }
+      return;
+    }
+
     if (!useSupabase || !supabaseClient) {
       purchaseDb.add(purchase);
       return;

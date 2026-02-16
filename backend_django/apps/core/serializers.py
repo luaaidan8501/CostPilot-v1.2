@@ -1,6 +1,15 @@
 from rest_framework import serializers
 
-from .models import Dish, Ingredient, Recipe, RecipeIngredient, Restaurant
+from .models import (
+    Dish,
+    Ingredient,
+    PurchaseRecord,
+    ReceiptRecord,
+    Recipe,
+    RecipeIngredient,
+    Restaurant,
+    SalesRecord,
+)
 
 
 class RestaurantSerializer(serializers.ModelSerializer):
@@ -77,3 +86,23 @@ class RecipeSerializer(serializers.ModelSerializer):
                 RecipeIngredient.objects.create(recipe=instance, **item)
 
         return instance
+
+
+class PurchaseRecordSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PurchaseRecord
+        fields = "__all__"
+
+
+class SalesRecordSerializer(serializers.ModelSerializer):
+    dish_id = serializers.IntegerField(source="dish.id", read_only=True)
+
+    class Meta:
+        model = SalesRecord
+        fields = "__all__"
+
+
+class ReceiptRecordSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ReceiptRecord
+        fields = "__all__"

@@ -65,3 +65,35 @@ class RecipeIngredient(TimeStampedModel):
 
     class Meta:
         unique_together = ("recipe", "ingredient")
+
+
+class PurchaseRecord(TimeStampedModel):
+    restaurant = models.ForeignKey(Restaurant, on_delete=models.CASCADE, related_name="purchases")
+    date = models.DateTimeField()
+    ingredient = models.ForeignKey(Ingredient, on_delete=models.SET_NULL, null=True, blank=True)
+    ingredient_name = models.CharField(max_length=255)
+    quantity = models.DecimalField(max_digits=12, decimal_places=3, default=0)
+    unit = models.CharField(max_length=20, default="kg")
+    total_price = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    unit_price = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    supplier_id = models.CharField(max_length=120, blank=True)
+    supplier = models.CharField(max_length=255, blank=True)
+    type = models.CharField(max_length=40, default="Regular")
+
+
+class SalesRecord(TimeStampedModel):
+    restaurant = models.ForeignKey(Restaurant, on_delete=models.CASCADE, related_name="sales_records")
+    dish = models.ForeignKey(Dish, on_delete=models.SET_NULL, null=True, blank=True)
+    dish_name = models.CharField(max_length=255)
+    date = models.DateTimeField()
+    quantity = models.DecimalField(max_digits=12, decimal_places=3, default=0)
+
+
+class ReceiptRecord(TimeStampedModel):
+    restaurant = models.ForeignKey(Restaurant, on_delete=models.CASCADE, related_name="receipts")
+    file_name = models.CharField(max_length=255)
+    file_url = models.URLField(blank=True)
+    uploaded_at = models.DateTimeField()
+    receipt_date = models.DateTimeField(null=True, blank=True)
+    week_start = models.DateTimeField()
+    items = models.JSONField(default=list, blank=True)

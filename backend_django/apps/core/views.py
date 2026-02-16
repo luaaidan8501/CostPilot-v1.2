@@ -2,12 +2,15 @@ from rest_framework import viewsets
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .models import Dish, Ingredient, Recipe, Restaurant
+from .models import Dish, Ingredient, PurchaseRecord, ReceiptRecord, Recipe, Restaurant, SalesRecord
 from .serializers import (
     DishSerializer,
     IngredientSerializer,
+    PurchaseRecordSerializer,
+    ReceiptRecordSerializer,
     RecipeSerializer,
     RestaurantSerializer,
+    SalesRecordSerializer,
 )
 
 
@@ -59,4 +62,37 @@ class RecipeViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(restaurant_id=restaurant_id)
         if dish_id:
             queryset = queryset.filter(dish_id=dish_id)
+        return queryset
+
+
+class PurchaseRecordViewSet(viewsets.ModelViewSet):
+    serializer_class = PurchaseRecordSerializer
+
+    def get_queryset(self):
+        queryset = PurchaseRecord.objects.select_related("restaurant", "ingredient").order_by("-date")
+        restaurant_id = self.request.query_params.get("restaurant")
+        if restaurant_id:
+            queryset = queryset.filter(restaurant_id=restaurant_id)
+        return queryset
+
+
+class SalesRecordViewSet(viewsets.ModelViewSet):
+    serializer_class = SalesRecordSerializer
+
+    def get_queryset(self):
+        queryset = SalesRecord.objects.select_related("restaurant", "dish").order_by("-date")
+        restaurant_id = self.request.query_params.get("restaurant")
+        if restaurant_id:
+            queryset = queryset.filter(restaurant_id=restaurant_id)
+        return queryset
+
+
+class ReceiptRecordViewSet(viewsets.ModelViewSet):
+    serializer_class = ReceiptRecordSerializer
+
+    def get_queryset(self):
+        queryset = ReceiptRecord.objects.select_related("restaurant").order_by("-uploaded_at")
+        restaurant_id = self.request.query_params.get("restaurant")
+        if restaurant_id:
+            queryset = queryset.filter(restaurant_id=restaurant_id)
         return queryset

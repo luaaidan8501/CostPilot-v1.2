@@ -27,6 +27,9 @@ python manage.py runserver 127.0.0.1:8000
 - `GET|POST /api/v1/ingredients/`
 - `GET|POST /api/v1/dishes/`
 - `GET|POST /api/v1/recipes/`
+- `GET|POST /api/v1/purchases/`
+- `GET|POST /api/v1/sales-records/`
+- `GET|POST /api/v1/receipts/`
 
 ## 4) Incremental Migration Plan
 
