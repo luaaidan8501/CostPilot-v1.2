@@ -92,7 +92,7 @@ class SalesRecord(TimeStampedModel):
 class ReceiptRecord(TimeStampedModel):
     restaurant = models.ForeignKey(Restaurant, on_delete=models.CASCADE, related_name="receipts")
     file_name = models.CharField(max_length=255)
-    file_url = models.URLField(blank=True)
+    file_url = models.TextField(blank=True)
     uploaded_at = models.DateTimeField()
     receipt_date = models.DateTimeField(null=True, blank=True)
     week_start = models.DateTimeField()

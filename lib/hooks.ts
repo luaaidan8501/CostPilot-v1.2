@@ -58,9 +58,10 @@ import type {
 
 // Initialize database on first hook call
 let dbInitialized = false;
-const useSupabase = Boolean(supabaseClient);
+const backendProvider = process.env.NEXT_PUBLIC_BACKEND_PROVIDER;
+const useSupabase = backendProvider === 'supabase' && Boolean(supabaseClient);
 const djangoBaseUrl = (process.env.NEXT_PUBLIC_DJANGO_API_URL || '').replace(/\/$/, '');
-const useDjango = process.env.NEXT_PUBLIC_BACKEND_PROVIDER === 'django' && Boolean(djangoBaseUrl);
+const useDjango = backendProvider === 'django' && Boolean(djangoBaseUrl);
 const useRemoteData = useSupabase || useDjango;
 const RESTAURANT_ID_STORAGE_KEY = 'costpilot-restaurant-id';
 const DJANGO_RESTAURANT_ID_STORAGE_KEY = 'costpilot-django-restaurant-id';
@@ -1439,7 +1440,7 @@ export function useReceipts() {
       const fetchReceipts = async () => {
         try {
           const restaurantId = await getDjangoRestaurantId();
-          const rows = await djangoFetch<any[]>(
+          const rows = await djangoRequest<any[]>(
             `/api/v1/receipts/?restaurant=${encodeURIComponent(restaurantId)}`
           );
           if (active) {
