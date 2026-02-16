@@ -30,6 +30,10 @@ python manage.py runserver 127.0.0.1:8000
 - `GET|POST /api/v1/purchases/`
 - `GET|POST /api/v1/sales-records/`
 - `GET|POST /api/v1/receipts/`
+- `GET|POST /api/v1/alerts/`
+- `GET|POST /api/v1/dashboard-kpis/`
+- `GET|POST /api/v1/analytics-data/`
+- `GET|POST /api/v1/dishes-over-target/`
 
 ## 4) Incremental Migration Plan
 

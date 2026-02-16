@@ -1,7 +1,11 @@
 from rest_framework import serializers
 
 from .models import (
+    AlertRecord,
+    AnalyticsDataRecord,
+    DashboardKPIRecord,
     Dish,
+    DishesOverTargetRecord,
     Ingredient,
     PurchaseRecord,
     ReceiptRecord,
@@ -105,4 +109,28 @@ class SalesRecordSerializer(serializers.ModelSerializer):
 class ReceiptRecordSerializer(serializers.ModelSerializer):
     class Meta:
         model = ReceiptRecord
+        fields = "__all__"
+
+
+class AlertRecordSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AlertRecord
+        fields = "__all__"
+
+
+class DashboardKPIRecordSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = DashboardKPIRecord
+        fields = "__all__"
+
+
+class AnalyticsDataRecordSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AnalyticsDataRecord
+        fields = "__all__"
+
+
+class DishesOverTargetRecordSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = DishesOverTargetRecord
         fields = "__all__"

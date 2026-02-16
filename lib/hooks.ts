@@ -466,7 +466,7 @@ function mapDjangoRecipeRow(row: any): Recipe {
 
 function mapAlertRow(row: any): Alert {
   return {
-    id: row.id,
+    id: String(row.id),
     title: row.title ?? '',
     description: row.description ?? '',
     type: row.type ?? 'ingredient',
@@ -515,11 +515,54 @@ function mapReceiptRow(row: any): Receipt {
 export function useDashboardSummary(dateRange?: { start: Date; end: Date }) {
   ensureDbInitialized();
   const [data, setData] = useState<DashboardKPI | null>(() =>
-    useSupabase ? null : dashboardDb.get() ?? mockDashboardKPI
+    useRemoteData ? null : dashboardDb.get() ?? mockDashboardKPI
   );
-  const [isLoading, setIsLoading] = useState(useSupabase);
+  const [isLoading, setIsLoading] = useState(useRemoteData);
 
   useEffect(() => {
+    if (useDjango) {
+      let active = true;
+
+      (async () => {
+        try {
+          const restaurantId = await getDjangoRestaurantId();
+          const rows = await djangoRequest<Array<any>>(
+            `/api/v1/dashboard-kpis/?restaurant=${encodeURIComponent(restaurantId)}`
+          );
+
+          if (rows && rows.length > 0) {
+            if (active) {
+              setData(rows[0].payload ?? mockDashboardKPI);
+            }
+          } else {
+            await djangoRequest('/api/v1/dashboard-kpis/', {
+              method: 'POST',
+              body: JSON.stringify({
+                restaurant: Number(restaurantId),
+                payload: mockDashboardKPI,
+              }),
+            });
+            if (active) {
+              setData(mockDashboardKPI);
+            }
+          }
+        } catch (error) {
+          console.error('[useDashboardSummary] Django error', error);
+          if (active) {
+            setData(dashboardDb.get() ?? mockDashboardKPI);
+          }
+        } finally {
+          if (active) {
+            setIsLoading(false);
+          }
+        }
+      })();
+
+      return () => {
+        active = false;
+      };
+    }
+
     if (!useSupabase || !supabaseClient) return;
     let active = true;
 
@@ -577,11 +620,38 @@ export function useDashboardSummary(dateRange?: { start: Date; end: Date }) {
 export function useRestaurant() {
   ensureDbInitialized();
   const [data, setData] = useState<Restaurant | null>(() =>
-    useSupabase ? null : restaurantDb.get()
+    useRemoteData ? null : restaurantDb.get()
   );
-  const [isLoading, setIsLoading] = useState(useSupabase);
+  const [isLoading, setIsLoading] = useState(useRemoteData);
 
   useEffect(() => {
+    if (useDjango) {
+      let active = true;
+
+      (async () => {
+        try {
+          const restaurantId = await getDjangoRestaurantId();
+          const row = await djangoRequest<any>(`/api/v1/restaurants/${restaurantId}/`);
+          if (active) {
+            setData(mapRestaurantRow(row));
+          }
+        } catch (error) {
+          console.error('[useRestaurant] Django error', error);
+          if (active) {
+            setData(restaurantDb.get());
+          }
+        } finally {
+          if (active) {
+            setIsLoading(false);
+          }
+        }
+      })();
+
+      return () => {
+        active = false;
+      };
+    }
+
     if (!useSupabase || !supabaseClient) return;
     let active = true;
 
@@ -1465,7 +1535,7 @@ export function useAddReceipts() {
     if (useDjango) {
       const restaurantId = await getDjangoRestaurantId();
       for (const receipt of receipts) {
-        await djangoFetch('/api/v1/receipts/', {
+        await djangoRequest('/api/v1/receipts/', {
           method: 'POST',
           body: JSON.stringify({
             restaurant: Number(restaurantId),
@@ -1534,11 +1604,62 @@ export function useSetSetupComplete() {
 export function useAlerts(filters?: { type?: string; severity?: string; status?: string }) {
   ensureDbInitialized();
   const [data, setData] = useState<Alert[]>(() =>
-    useSupabase ? [] : alertDb.getAll()
+    useRemoteData ? [] : alertDb.getAll()
   );
-  const [isLoading, setIsLoading] = useState(useSupabase);
+  const [isLoading, setIsLoading] = useState(useRemoteData);
 
   useEffect(() => {
+    if (useDjango) {
+      let active = true;
+
+      (async () => {
+        try {
+          const restaurantId = await getDjangoRestaurantId();
+          const rows = await djangoRequest<Array<any>>(
+            `/api/v1/alerts/?restaurant=${encodeURIComponent(restaurantId)}`
+          );
+
+          if (rows && rows.length > 0) {
+            if (active) {
+              setData(rows.map(mapAlertRow));
+            }
+          } else {
+            for (const alert of mockAlerts) {
+              await djangoRequest('/api/v1/alerts/', {
+                method: 'POST',
+                body: JSON.stringify({
+                  restaurant: Number(restaurantId),
+                  title: alert.title,
+                  description: alert.description,
+                  type: alert.type,
+                  severity: alert.severity,
+                  date: alert.date?.toISOString?.() ?? new Date().toISOString(),
+                  status: alert.status,
+                  related_id: alert.relatedId ?? '',
+                }),
+              });
+            }
+            if (active) {
+              setData(mockAlerts);
+            }
+          }
+        } catch (error) {
+          console.error('[useAlerts] Django error', error);
+          if (active) {
+            setData(alertDb.getAll());
+          }
+        } finally {
+          if (active) {
+            setIsLoading(false);
+          }
+        }
+      })();
+
+      return () => {
+        active = false;
+      };
+    }
+
     if (!useSupabase || !supabaseClient) return;
     let active = true;
 
@@ -1599,11 +1720,54 @@ export function useAlerts(filters?: { type?: string; severity?: string; status?:
 export function useAnalyticsData(dateRange?: { start: Date; end: Date }, groupBy?: string) {
   ensureDbInitialized();
   const [data, setData] = useState<AnalyticsDataPoint[]>(() =>
-    useSupabase ? [] : analyticsDb.getAll()
+    useRemoteData ? [] : analyticsDb.getAll()
   );
-  const [isLoading, setIsLoading] = useState(useSupabase);
+  const [isLoading, setIsLoading] = useState(useRemoteData);
 
   useEffect(() => {
+    if (useDjango) {
+      let active = true;
+
+      (async () => {
+        try {
+          const restaurantId = await getDjangoRestaurantId();
+          const rows = await djangoRequest<Array<any>>(
+            `/api/v1/analytics-data/?restaurant=${encodeURIComponent(restaurantId)}`
+          );
+
+          if (rows && rows.length > 0) {
+            if (active) {
+              setData(rows[0].payload ?? mockAnalyticsData);
+            }
+          } else {
+            await djangoRequest('/api/v1/analytics-data/', {
+              method: 'POST',
+              body: JSON.stringify({
+                restaurant: Number(restaurantId),
+                payload: mockAnalyticsData,
+              }),
+            });
+            if (active) {
+              setData(mockAnalyticsData);
+            }
+          }
+        } catch (error) {
+          console.error('[useAnalyticsData] Django error', error);
+          if (active) {
+            setData(analyticsDb.getAll());
+          }
+        } finally {
+          if (active) {
+            setIsLoading(false);
+          }
+        }
+      })();
+
+      return () => {
+        active = false;
+      };
+    }
+
     if (!useSupabase || !supabaseClient) return;
     let active = true;
 
@@ -1661,11 +1825,54 @@ export function useAnalyticsData(dateRange?: { start: Date; end: Date }, groupBy
 export function useDishesOverTarget() {
   ensureDbInitialized();
   const [data, setData] = useState<any[]>(() =>
-    useSupabase ? [] : dishesDb.getAll()
+    useRemoteData ? [] : dishesDb.getAll()
   );
-  const [isLoading, setIsLoading] = useState(useSupabase);
+  const [isLoading, setIsLoading] = useState(useRemoteData);
 
   useEffect(() => {
+    if (useDjango) {
+      let active = true;
+
+      (async () => {
+        try {
+          const restaurantId = await getDjangoRestaurantId();
+          const rows = await djangoRequest<Array<any>>(
+            `/api/v1/dishes-over-target/?restaurant=${encodeURIComponent(restaurantId)}`
+          );
+
+          if (rows && rows.length > 0) {
+            if (active) {
+              setData(rows[0].payload ?? mockDishesOverTarget);
+            }
+          } else {
+            await djangoRequest('/api/v1/dishes-over-target/', {
+              method: 'POST',
+              body: JSON.stringify({
+                restaurant: Number(restaurantId),
+                payload: mockDishesOverTarget,
+              }),
+            });
+            if (active) {
+              setData(mockDishesOverTarget);
+            }
+          }
+        } catch (error) {
+          console.error('[useDishesOverTarget] Django error', error);
+          if (active) {
+            setData(dishesDb.getAll());
+          }
+        } finally {
+          if (active) {
+            setIsLoading(false);
+          }
+        }
+      })();
+
+      return () => {
+        active = false;
+      };
+    }
+
     if (!useSupabase || !supabaseClient) return;
     let active = true;
 
@@ -1724,6 +1931,20 @@ export function useDishesOverTarget() {
 export function useSaveRestaurant() {
   ensureDbInitialized();
   return useCallback(async (restaurant: Restaurant) => {
+    if (useDjango) {
+      const restaurantId = await getDjangoRestaurantId();
+      await djangoRequest(`/api/v1/restaurants/${restaurantId}/`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          name: restaurant.name,
+          region: restaurant.region,
+          city: restaurant.city,
+          target_food_cost_percentage: restaurant.targetFoodCostPercentage,
+        }),
+      });
+      return;
+    }
+
     if (!useSupabase || !supabaseClient) {
       restaurantDb.set(restaurant);
       console.log('[useSaveRestaurant] Restaurant saved:', restaurant);

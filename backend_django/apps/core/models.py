@@ -97,3 +97,33 @@ class ReceiptRecord(TimeStampedModel):
     receipt_date = models.DateTimeField(null=True, blank=True)
     week_start = models.DateTimeField()
     items = models.JSONField(default=list, blank=True)
+
+
+class AlertRecord(TimeStampedModel):
+    restaurant = models.ForeignKey(Restaurant, on_delete=models.CASCADE, related_name="alerts")
+    title = models.CharField(max_length=255)
+    description = models.TextField(blank=True)
+    type = models.CharField(max_length=40, default="ingredient")
+    severity = models.CharField(max_length=40, default="info")
+    date = models.DateTimeField()
+    status = models.CharField(max_length=40, default="open")
+    related_id = models.CharField(max_length=120, blank=True)
+
+
+class DashboardKPIRecord(TimeStampedModel):
+    restaurant = models.ForeignKey(Restaurant, on_delete=models.CASCADE, related_name="dashboard_kpis")
+    payload = models.JSONField(default=dict, blank=True)
+
+
+class AnalyticsDataRecord(TimeStampedModel):
+    restaurant = models.ForeignKey(
+        Restaurant, on_delete=models.CASCADE, related_name="analytics_data_records"
+    )
+    payload = models.JSONField(default=list, blank=True)
+
+
+class DishesOverTargetRecord(TimeStampedModel):
+    restaurant = models.ForeignKey(
+        Restaurant, on_delete=models.CASCADE, related_name="dishes_over_target_records"
+    )
+    payload = models.JSONField(default=list, blank=True)

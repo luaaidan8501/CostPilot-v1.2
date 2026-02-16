@@ -2,9 +2,25 @@ from rest_framework import viewsets
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .models import Dish, Ingredient, PurchaseRecord, ReceiptRecord, Recipe, Restaurant, SalesRecord
+from .models import (
+    AlertRecord,
+    AnalyticsDataRecord,
+    DashboardKPIRecord,
+    Dish,
+    DishesOverTargetRecord,
+    Ingredient,
+    PurchaseRecord,
+    ReceiptRecord,
+    Recipe,
+    Restaurant,
+    SalesRecord,
+)
 from .serializers import (
+    AlertRecordSerializer,
+    AnalyticsDataRecordSerializer,
+    DashboardKPIRecordSerializer,
     DishSerializer,
+    DishesOverTargetRecordSerializer,
     IngredientSerializer,
     PurchaseRecordSerializer,
     ReceiptRecordSerializer,
@@ -92,6 +108,50 @@ class ReceiptRecordViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         queryset = ReceiptRecord.objects.select_related("restaurant").order_by("-uploaded_at")
+        restaurant_id = self.request.query_params.get("restaurant")
+        if restaurant_id:
+            queryset = queryset.filter(restaurant_id=restaurant_id)
+        return queryset
+
+
+class AlertRecordViewSet(viewsets.ModelViewSet):
+    serializer_class = AlertRecordSerializer
+
+    def get_queryset(self):
+        queryset = AlertRecord.objects.select_related("restaurant").order_by("-date")
+        restaurant_id = self.request.query_params.get("restaurant")
+        if restaurant_id:
+            queryset = queryset.filter(restaurant_id=restaurant_id)
+        return queryset
+
+
+class DashboardKPIRecordViewSet(viewsets.ModelViewSet):
+    serializer_class = DashboardKPIRecordSerializer
+
+    def get_queryset(self):
+        queryset = DashboardKPIRecord.objects.select_related("restaurant").order_by("-created_at")
+        restaurant_id = self.request.query_params.get("restaurant")
+        if restaurant_id:
+            queryset = queryset.filter(restaurant_id=restaurant_id)
+        return queryset
+
+
+class AnalyticsDataRecordViewSet(viewsets.ModelViewSet):
+    serializer_class = AnalyticsDataRecordSerializer
+
+    def get_queryset(self):
+        queryset = AnalyticsDataRecord.objects.select_related("restaurant").order_by("-created_at")
+        restaurant_id = self.request.query_params.get("restaurant")
+        if restaurant_id:
+            queryset = queryset.filter(restaurant_id=restaurant_id)
+        return queryset
+
+
+class DishesOverTargetRecordViewSet(viewsets.ModelViewSet):
+    serializer_class = DishesOverTargetRecordSerializer
+
+    def get_queryset(self):
+        queryset = DishesOverTargetRecord.objects.select_related("restaurant").order_by("-created_at")
         restaurant_id = self.request.query_params.get("restaurant")
         if restaurant_id:
             queryset = queryset.filter(restaurant_id=restaurant_id)

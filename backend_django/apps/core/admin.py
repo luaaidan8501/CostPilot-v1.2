@@ -1,7 +1,11 @@
 from django.contrib import admin
 
 from .models import (
+    AlertRecord,
+    AnalyticsDataRecord,
+    DashboardKPIRecord,
     Dish,
+    DishesOverTargetRecord,
     Ingredient,
     PurchaseRecord,
     ReceiptRecord,
@@ -19,3 +23,7 @@ admin.site.register(RecipeIngredient)
 admin.site.register(PurchaseRecord)
 admin.site.register(SalesRecord)
 admin.site.register(ReceiptRecord)
+admin.site.register(AlertRecord)
+admin.site.register(DashboardKPIRecord)
+admin.site.register(AnalyticsDataRecord)
+admin.site.register(DishesOverTargetRecord)
