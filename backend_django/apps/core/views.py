@@ -25,15 +25,38 @@ class RestaurantViewSet(viewsets.ModelViewSet):
 
 
 class IngredientViewSet(viewsets.ModelViewSet):
-    queryset = Ingredient.objects.select_related("restaurant").all().order_by("name")
     serializer_class = IngredientSerializer
+
+    def get_queryset(self):
+        queryset = Ingredient.objects.select_related("restaurant").all().order_by("name")
+        restaurant_id = self.request.query_params.get("restaurant")
+        if restaurant_id:
+            queryset = queryset.filter(restaurant_id=restaurant_id)
+        return queryset
 
 
 class DishViewSet(viewsets.ModelViewSet):
-    queryset = Dish.objects.select_related("restaurant").all().order_by("name")
     serializer_class = DishSerializer
+
+    def get_queryset(self):
+        queryset = Dish.objects.select_related("restaurant").all().order_by("name")
+        restaurant_id = self.request.query_params.get("restaurant")
+        if restaurant_id:
+            queryset = queryset.filter(restaurant_id=restaurant_id)
+        return queryset
 
 
 class RecipeViewSet(viewsets.ModelViewSet):
-    queryset = Recipe.objects.select_related("restaurant", "dish").prefetch_related("items__ingredient")
     serializer_class = RecipeSerializer
+
+    def get_queryset(self):
+        queryset = Recipe.objects.select_related("restaurant", "dish").prefetch_related(
+            "items__ingredient"
+        )
+        restaurant_id = self.request.query_params.get("restaurant")
+        dish_id = self.request.query_params.get("dish")
+        if restaurant_id:
+            queryset = queryset.filter(restaurant_id=restaurant_id)
+        if dish_id:
+            queryset = queryset.filter(dish_id=dish_id)
+        return queryset

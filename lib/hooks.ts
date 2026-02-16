@@ -425,6 +425,29 @@ function mapRecipeRow(row: any): Recipe {
   };
 }
 
+function mapDjangoRecipeRow(row: any): Recipe {
+  return {
+    id: String(row.id),
+    posItemId: String(row.dish),
+    posItemName: row.dish_name ?? '',
+    sellingPrice: Number(row.dish_selling_price ?? 0),
+    ingredients: Array.isArray(row.items)
+      ? row.items.map((item: any) => ({
+          ingredientId: String(item.ingredient),
+          ingredientName: item.ingredient_name ?? '',
+          quantityPerPortion: Number(item.quantity_per_portion ?? 0),
+          unit: 'kg',
+          totalCost:
+            Number(item.quantity_per_portion ?? 0) * Number(item.cost_per_unit ?? 0),
+          costPerUnit: Number(item.cost_per_unit ?? 0),
+          costPerPortion: Number(item.cost_per_portion ?? 0),
+        }))
+      : [],
+    totalPlateCost: Number(row.total_plate_cost ?? 0),
+    foodCostPercentage: Number(row.food_cost_percentage ?? 0),
+  };
+}
+
 function mapAlertRow(row: any): Alert {
   return {
     id: row.id,
@@ -833,9 +856,47 @@ export function useRecipes() {
   const [data, setData] = useState<Recipe[]>(() =>
     useSupabase ? [] : recipeDb.getAll()
   );
-  const [isLoading, setIsLoading] = useState(useSupabase);
+  const [isLoading, setIsLoading] = useState(useRemoteData);
 
   useEffect(() => {
+    if (useDjango) {
+      let active = true;
+
+      const fetchRecipes = async () => {
+        try {
+          const restaurantId = await getDjangoRestaurantId();
+          const rows = await djangoRequest<Array<any>>(
+            `/api/v1/recipes/?restaurant=${restaurantId}`
+          );
+          if (active) {
+            setData(rows.map(mapDjangoRecipeRow));
+          }
+        } catch (error) {
+          console.error('[useRecipes] Django error', error);
+          if (active) {
+            setData(recipeDb.getAll());
+          }
+        } finally {
+          if (active) {
+            setIsLoading(false);
+          }
+        }
+      };
+
+      fetchRecipes();
+
+      const handleRefresh = () => {
+        fetchRecipes();
+      };
+
+      window.addEventListener('costpilot-recipes-refresh', handleRefresh);
+
+      return () => {
+        active = false;
+        window.removeEventListener('costpilot-recipes-refresh', handleRefresh);
+      };
+    }
+
     if (!useSupabase || !supabaseClient) return;
     let active = true;
 
@@ -892,9 +953,40 @@ export function useRecipeByPosItem(posItemId: string) {
   const [data, setData] = useState<Recipe | null>(() =>
     useSupabase ? null : recipeDb.getByPosItemId(posItemId)
   );
-  const [isLoading, setIsLoading] = useState(useSupabase);
+  const [isLoading, setIsLoading] = useState(useRemoteData);
 
   useEffect(() => {
+    if (useDjango) {
+      if (!posItemId) {
+        setData(null);
+        setIsLoading(false);
+        return;
+      }
+
+      let active = true;
+      (async () => {
+        try {
+          const rows = await djangoRequest<Array<any>>(`/api/v1/recipes/?dish=${posItemId}`);
+          if (active) {
+            setData(rows.length > 0 ? mapDjangoRecipeRow(rows[0]) : null);
+          }
+        } catch (error) {
+          console.error('[useRecipeByPosItem] Django error', error);
+          if (active) {
+            setData(recipeDb.getByPosItemId(posItemId));
+          }
+        } finally {
+          if (active) {
+            setIsLoading(false);
+          }
+        }
+      })();
+
+      return () => {
+        active = false;
+      };
+    }
+
     if (!useSupabase || !supabaseClient) return;
     let active = true;
 
@@ -1497,6 +1589,30 @@ export function useSavePurchase() {
 export function useSaveRecipe() {
   ensureDbInitialized();
   return useCallback(async (recipe: Recipe) => {
+    if (useDjango) {
+      const restaurantId = await getDjangoRestaurantId();
+      await djangoRequest('/api/v1/recipes/', {
+        method: 'POST',
+        body: JSON.stringify({
+          restaurant: Number(restaurantId),
+          dish: Number(recipe.posItemId),
+          total_plate_cost: recipe.totalPlateCost,
+          food_cost_percentage: recipe.foodCostPercentage,
+          items: recipe.ingredients.map((item) => ({
+            ingredient: Number(item.ingredientId),
+            quantity_per_portion: item.quantityPerPortion,
+            cost_per_unit: item.costPerUnit,
+            cost_per_portion: item.costPerPortion,
+          })),
+        }),
+      });
+
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('costpilot-recipes-refresh'));
+      }
+      return;
+    }
+
     if (!useSupabase || !supabaseClient) {
       recipeDb.add(recipe);
       return;
@@ -1522,6 +1638,30 @@ export function useSaveRecipe() {
 export function useUpdateRecipe() {
   ensureDbInitialized();
   return useCallback(async (id: string, recipe: Partial<Recipe>) => {
+    if (useDjango) {
+      await djangoRequest(`/api/v1/recipes/${id}/`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          dish: recipe.posItemId ? Number(recipe.posItemId) : undefined,
+          total_plate_cost: recipe.totalPlateCost,
+          food_cost_percentage: recipe.foodCostPercentage,
+          items: recipe.ingredients
+            ? recipe.ingredients.map((item) => ({
+                ingredient: Number(item.ingredientId),
+                quantity_per_portion: item.quantityPerPortion,
+                cost_per_unit: item.costPerUnit,
+                cost_per_portion: item.costPerPortion,
+              }))
+            : undefined,
+        }),
+      });
+
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('costpilot-recipes-refresh'));
+      }
+      return;
+    }
+
     if (!useSupabase || !supabaseClient) {
       recipeDb.update(id, recipe);
       return;

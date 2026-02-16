@@ -38,6 +38,10 @@ class RecipeIngredientSerializer(serializers.ModelSerializer):
 
 class RecipeSerializer(serializers.ModelSerializer):
     items = RecipeIngredientSerializer(many=True, required=False)
+    dish_name = serializers.CharField(source="dish.name", read_only=True)
+    dish_selling_price = serializers.DecimalField(
+        source="dish.selling_price", max_digits=12, decimal_places=2, read_only=True
+    )
 
     class Meta:
         model = Recipe
@@ -45,6 +49,8 @@ class RecipeSerializer(serializers.ModelSerializer):
             "id",
             "restaurant",
             "dish",
+            "dish_name",
+            "dish_selling_price",
             "total_plate_cost",
             "food_cost_percentage",
             "items",
