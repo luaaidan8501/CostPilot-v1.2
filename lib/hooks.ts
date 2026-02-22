@@ -37,7 +37,7 @@ import {
   dishesDb,
   dashboardDb,
   setSeedData,
-  loadSeedRestaurant,
+  unloadRestaurant,
   subscribeToSales,
   subscribeToReceipts,
 } from './db';
@@ -65,8 +65,18 @@ const useDjango = backendProvider === 'django' && Boolean(djangoBaseUrl);
 const useRemoteData = useSupabase || useDjango;
 const RESTAURANT_ID_STORAGE_KEY = 'costpilot-restaurant-id';
 const DJANGO_RESTAURANT_ID_STORAGE_KEY = 'costpilot-django-restaurant-id';
+const DJANGO_FORCE_NEW_RESTAURANT_KEY = 'costpilot-django-force-new-restaurant';
+const DEMO_MODE_KEY = 'costpilot-demo-mode';
 let supabaseRestaurantIdPromise: Promise<string> | null = null;
 let djangoRestaurantIdPromise: Promise<string> | null = null;
+const EMPTY_DASHBOARD_KPI: DashboardKPI = {
+  currentFoodCostPercentage: 0,
+  targetRange: { min: 0, max: 0 },
+  projectedFoodCostPercentage: 0,
+  projectedChange: 0,
+  topCostDrivers: [],
+  potentialSavings: 0,
+};
 
 function ensureDbInitialized() {
   if (!dbInitialized) {
@@ -94,9 +104,31 @@ function ensureDbInitialized() {
       seedAnalyticsData,
       seedDishesOverTarget
     );
-    loadSeedRestaurant();
     dbInitialized = true;
   }
+}
+
+export function prepareNewRestaurantSignup() {
+  if (typeof window === 'undefined') return;
+
+  storage.clearAll();
+  unloadRestaurant();
+  window.localStorage.removeItem(RESTAURANT_ID_STORAGE_KEY);
+  window.localStorage.removeItem(DJANGO_RESTAURANT_ID_STORAGE_KEY);
+  window.localStorage.setItem(DJANGO_FORCE_NEW_RESTAURANT_KEY, '1');
+  window.localStorage.setItem(DEMO_MODE_KEY, '0');
+  supabaseRestaurantIdPromise = null;
+  djangoRestaurantIdPromise = null;
+}
+
+export function setDemoSessionMode(enabled: boolean) {
+  if (typeof window === 'undefined') return;
+  window.localStorage.setItem(DEMO_MODE_KEY, enabled ? '1' : '0');
+}
+
+function isDemoSessionMode() {
+  if (typeof window === 'undefined') return false;
+  return window.localStorage.getItem(DEMO_MODE_KEY) === '1';
 }
 
 function isUuid(value: string) {
@@ -133,11 +165,12 @@ async function getDjangoRestaurantId() {
 
   const cached = window.localStorage.getItem(DJANGO_RESTAURANT_ID_STORAGE_KEY);
   if (cached) return cached;
+  const forceCreateNew = window.localStorage.getItem(DJANGO_FORCE_NEW_RESTAURANT_KEY) === '1';
 
   if (!djangoRestaurantIdPromise) {
     djangoRestaurantIdPromise = (async () => {
       const rows = await djangoRequest<Array<{ id: number }>>('/api/v1/restaurants/');
-      if (rows.length > 0) {
+      if (!forceCreateNew && rows.length > 0) {
         const id = String(rows[0].id);
         window.localStorage.setItem(DJANGO_RESTAURANT_ID_STORAGE_KEY, id);
         return id;
@@ -146,15 +179,16 @@ async function getDjangoRestaurantId() {
       const created = await djangoRequest<{ id: number }>('/api/v1/restaurants/', {
         method: 'POST',
         body: JSON.stringify({
-          name: seedRestaurant.name,
-          region: seedRestaurant.region,
-          city: seedRestaurant.city,
-          target_food_cost_percentage: seedRestaurant.targetFoodCostPercentage,
+          name: 'New Restaurant',
+          region: '',
+          city: '',
+          target_food_cost_percentage: null,
         }),
       });
 
       const id = String(created.id);
       window.localStorage.setItem(DJANGO_RESTAURANT_ID_STORAGE_KEY, id);
+      window.localStorage.removeItem(DJANGO_FORCE_NEW_RESTAURANT_KEY);
       return id;
     })();
   }
@@ -516,11 +550,12 @@ function mapReceiptRow(row: any): Receipt {
 export function useDashboardSummary(dateRange?: { start: Date; end: Date }) {
   ensureDbInitialized();
   const [data, setData] = useState<DashboardKPI | null>(() =>
-    useRemoteData ? null : dashboardDb.get() ?? mockDashboardKPI
+    useRemoteData ? null : dashboardDb.get() ?? (isDemoSessionMode() ? mockDashboardKPI : EMPTY_DASHBOARD_KPI)
   );
   const [isLoading, setIsLoading] = useState(useRemoteData);
 
   useEffect(() => {
+    const isDemo = isDemoSessionMode();
     if (useDjango) {
       let active = true;
 
@@ -533,24 +568,28 @@ export function useDashboardSummary(dateRange?: { start: Date; end: Date }) {
 
           if (rows && rows.length > 0) {
             if (active) {
-              setData(rows[0].payload ?? mockDashboardKPI);
+              setData(rows[0].payload ?? (isDemo ? mockDashboardKPI : EMPTY_DASHBOARD_KPI));
             }
           } else {
-            await djangoRequest('/api/v1/dashboard-kpis/', {
-              method: 'POST',
-              body: JSON.stringify({
-                restaurant: Number(restaurantId),
-                payload: mockDashboardKPI,
-              }),
-            });
             if (active) {
-              setData(mockDashboardKPI);
+              if (isDemo) {
+                await djangoRequest('/api/v1/dashboard-kpis/', {
+                  method: 'POST',
+                  body: JSON.stringify({
+                    restaurant: Number(restaurantId),
+                    payload: mockDashboardKPI,
+                  }),
+                });
+                setData(mockDashboardKPI);
+              } else {
+                setData(EMPTY_DASHBOARD_KPI);
+              }
             }
           }
         } catch (error) {
           console.error('[useDashboardSummary] Django error', error);
           if (active) {
-            setData(dashboardDb.get() ?? mockDashboardKPI);
+            setData(dashboardDb.get() ?? (isDemo ? mockDashboardKPI : EMPTY_DASHBOARD_KPI));
           }
         } finally {
           if (active) {
@@ -583,21 +622,25 @@ export function useDashboardSummary(dateRange?: { start: Date; end: Date }) {
 
         if (rows && rows.length > 0) {
           if (active) {
-            setData(rows[0].payload ?? mockDashboardKPI);
+            setData(rows[0].payload ?? (isDemo ? mockDashboardKPI : EMPTY_DASHBOARD_KPI));
           }
         } else {
-          await supabaseClient.from('dashboard_kpis').insert({
-            restaurant_id: restaurantId,
-            payload: mockDashboardKPI,
-          });
           if (active) {
-            setData(mockDashboardKPI);
+            if (isDemo) {
+              await supabaseClient.from('dashboard_kpis').insert({
+                restaurant_id: restaurantId,
+                payload: mockDashboardKPI,
+              });
+              setData(mockDashboardKPI);
+            } else {
+              setData(EMPTY_DASHBOARD_KPI);
+            }
           }
         }
       } catch (error) {
         console.error('[useDashboardSummary] Supabase error', error);
         if (active) {
-          setData(dashboardDb.get() ?? mockDashboardKPI);
+          setData(dashboardDb.get() ?? (isDemo ? mockDashboardKPI : EMPTY_DASHBOARD_KPI));
         }
       } finally {
         if (active) {
@@ -612,7 +655,7 @@ export function useDashboardSummary(dateRange?: { start: Date; end: Date }) {
   }, []);
 
   return {
-    data: data ?? mockDashboardKPI,
+    data: data ?? (isDemoSessionMode() ? mockDashboardKPI : EMPTY_DASHBOARD_KPI),
     isLoading,
     error: null,
   };
@@ -1610,6 +1653,7 @@ export function useAlerts(filters?: { type?: string; severity?: string; status?:
   const [isLoading, setIsLoading] = useState(useRemoteData);
 
   useEffect(() => {
+    const isDemo = isDemoSessionMode();
     if (useDjango) {
       let active = true;
 
@@ -1625,23 +1669,27 @@ export function useAlerts(filters?: { type?: string; severity?: string; status?:
               setData(rows.map(mapAlertRow));
             }
           } else {
-            for (const alert of mockAlerts) {
-              await djangoRequest('/api/v1/alerts/', {
-                method: 'POST',
-                body: JSON.stringify({
-                  restaurant: Number(restaurantId),
-                  title: alert.title,
-                  description: alert.description,
-                  type: alert.type,
-                  severity: alert.severity,
-                  date: alert.date?.toISOString?.() ?? new Date().toISOString(),
-                  status: alert.status,
-                  related_id: alert.relatedId ?? '',
-                }),
-              });
-            }
             if (active) {
-              setData(mockAlerts);
+              if (isDemo) {
+                for (const alert of mockAlerts) {
+                  await djangoRequest('/api/v1/alerts/', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                      restaurant: Number(restaurantId),
+                      title: alert.title,
+                      description: alert.description,
+                      type: alert.type,
+                      severity: alert.severity,
+                      date: alert.date?.toISOString?.() ?? new Date().toISOString(),
+                      status: alert.status,
+                      related_id: alert.relatedId ?? '',
+                    }),
+                  });
+                }
+                setData(mockAlerts);
+              } else {
+                setData([]);
+              }
             }
           }
         } catch (error) {
@@ -1726,6 +1774,7 @@ export function useAnalyticsData(dateRange?: { start: Date; end: Date }, groupBy
   const [isLoading, setIsLoading] = useState(useRemoteData);
 
   useEffect(() => {
+    const isDemo = isDemoSessionMode();
     if (useDjango) {
       let active = true;
 
@@ -1738,18 +1787,22 @@ export function useAnalyticsData(dateRange?: { start: Date; end: Date }, groupBy
 
           if (rows && rows.length > 0) {
             if (active) {
-              setData(rows[0].payload ?? mockAnalyticsData);
+              setData(rows[0].payload ?? (isDemo ? mockAnalyticsData : []));
             }
           } else {
-            await djangoRequest('/api/v1/analytics-data/', {
-              method: 'POST',
-              body: JSON.stringify({
-                restaurant: Number(restaurantId),
-                payload: mockAnalyticsData,
-              }),
-            });
             if (active) {
-              setData(mockAnalyticsData);
+              if (isDemo) {
+                await djangoRequest('/api/v1/analytics-data/', {
+                  method: 'POST',
+                  body: JSON.stringify({
+                    restaurant: Number(restaurantId),
+                    payload: mockAnalyticsData,
+                  }),
+                });
+                setData(mockAnalyticsData);
+              } else {
+                setData([]);
+              }
             }
           }
         } catch (error) {
@@ -1788,15 +1841,19 @@ export function useAnalyticsData(dateRange?: { start: Date; end: Date }, groupBy
 
         if (rows && rows.length > 0) {
           if (active) {
-            setData(rows[0].payload ?? mockAnalyticsData);
+            setData(rows[0].payload ?? (isDemo ? mockAnalyticsData : []));
           }
         } else {
-          await supabaseClient.from('analytics_data').insert({
-            restaurant_id: restaurantId,
-            payload: mockAnalyticsData,
-          });
           if (active) {
-            setData(mockAnalyticsData);
+            if (isDemo) {
+              await supabaseClient.from('analytics_data').insert({
+                restaurant_id: restaurantId,
+                payload: mockAnalyticsData,
+              });
+              setData(mockAnalyticsData);
+            } else {
+              setData([]);
+            }
           }
         }
       } catch (error) {
@@ -1831,6 +1888,7 @@ export function useDishesOverTarget() {
   const [isLoading, setIsLoading] = useState(useRemoteData);
 
   useEffect(() => {
+    const isDemo = isDemoSessionMode();
     if (useDjango) {
       let active = true;
 
@@ -1843,18 +1901,22 @@ export function useDishesOverTarget() {
 
           if (rows && rows.length > 0) {
             if (active) {
-              setData(rows[0].payload ?? mockDishesOverTarget);
+              setData(rows[0].payload ?? (isDemo ? mockDishesOverTarget : []));
             }
           } else {
-            await djangoRequest('/api/v1/dishes-over-target/', {
-              method: 'POST',
-              body: JSON.stringify({
-                restaurant: Number(restaurantId),
-                payload: mockDishesOverTarget,
-              }),
-            });
             if (active) {
-              setData(mockDishesOverTarget);
+              if (isDemo) {
+                await djangoRequest('/api/v1/dishes-over-target/', {
+                  method: 'POST',
+                  body: JSON.stringify({
+                    restaurant: Number(restaurantId),
+                    payload: mockDishesOverTarget,
+                  }),
+                });
+                setData(mockDishesOverTarget);
+              } else {
+                setData([]);
+              }
             }
           }
         } catch (error) {
@@ -1893,15 +1955,19 @@ export function useDishesOverTarget() {
 
         if (rows && rows.length > 0) {
           if (active) {
-            setData(rows[0].payload ?? mockDishesOverTarget);
+            setData(rows[0].payload ?? (isDemo ? mockDishesOverTarget : []));
           }
         } else {
-          await supabaseClient.from('dishes_over_target').insert({
-            restaurant_id: restaurantId,
-            payload: mockDishesOverTarget,
-          });
           if (active) {
-            setData(mockDishesOverTarget);
+            if (isDemo) {
+              await supabaseClient.from('dishes_over_target').insert({
+                restaurant_id: restaurantId,
+                payload: mockDishesOverTarget,
+              });
+              setData(mockDishesOverTarget);
+            } else {
+              setData([]);
+            }
           }
         }
       } catch (error) {

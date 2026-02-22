@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ChefHatIcon } from '@/components/icons';
+import { prepareNewRestaurantSignup } from '@/lib/hooks';
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -30,6 +31,7 @@ export default function RegisterPage() {
     setIsLoading(true);
     // Simulate API call
     setTimeout(() => {
+      prepareNewRestaurantSignup();
       router.push('/onboarding');
       setIsLoading(false);
     }, 500);
