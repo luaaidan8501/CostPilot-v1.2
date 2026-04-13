@@ -1,5 +1,6 @@
-"use client"
+ "use client"
 
+import { useState } from "react"
 import { useDashboardSummary, useDishesOverTarget } from "@/lib/hooks"
 import { FoodCostChart } from "@/components/dashboard/food-cost-chart"
 import { MainCostDriver } from "@/components/dashboard/main-cost-driver"
