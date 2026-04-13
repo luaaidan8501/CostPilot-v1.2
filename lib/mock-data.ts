@@ -257,26 +257,33 @@ export const mockRecipes: Recipe[] = [
   },
 ]
 
+const recentDate = (offsetDays: number) => {
+  const base = new Date()
+  const next = new Date(base)
+  next.setDate(base.getDate() - offsetDays)
+  return next
+}
+
 export const mockSalesRecords: SalesRecord[] = [
   {
     id: "sale_1",
     posItemId: "1",
     posItemName: "Pork Sisig Rice Bowl",
-    date: new Date("2025-11-12"),
+    date: recentDate(2),
     quantity: 32,
   },
   {
     id: "sale_2",
     posItemId: "2",
     posItemName: "Chicken Adobo Plate",
-    date: new Date("2025-11-12"),
+    date: recentDate(1),
     quantity: 28,
   },
   {
     id: "sale_3",
     posItemId: "4",
     posItemName: "Iced Tea",
-    date: new Date("2025-11-12"),
+    date: recentDate(0),
     quantity: 90,
   },
 ]

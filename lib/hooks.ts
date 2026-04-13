@@ -66,9 +66,11 @@ const useRemoteData = useSupabase || useDjango;
 const RESTAURANT_ID_STORAGE_KEY = 'costpilot-restaurant-id';
 const DJANGO_RESTAURANT_ID_STORAGE_KEY = 'costpilot-django-restaurant-id';
 const DJANGO_FORCE_NEW_RESTAURANT_KEY = 'costpilot-django-force-new-restaurant';
+const DJANGO_DEMO_RESTAURANT_ID_STORAGE_KEY = 'costpilot-django-demo-restaurant-id';
 const DEMO_MODE_KEY = 'costpilot-demo-mode';
 let supabaseRestaurantIdPromise: Promise<string> | null = null;
 let djangoRestaurantIdPromise: Promise<string> | null = null;
+let djangoDemoSeedPromise: Promise<void> | null = null;
 const EMPTY_DASHBOARD_KPI: DashboardKPI = {
   currentFoodCostPercentage: 0,
   targetRange: { min: 0, max: 0 },
@@ -115,6 +117,7 @@ export function prepareNewRestaurantSignup() {
   unloadRestaurant();
   window.localStorage.removeItem(RESTAURANT_ID_STORAGE_KEY);
   window.localStorage.removeItem(DJANGO_RESTAURANT_ID_STORAGE_KEY);
+  window.localStorage.removeItem(DJANGO_DEMO_RESTAURANT_ID_STORAGE_KEY);
   window.localStorage.setItem(DJANGO_FORCE_NEW_RESTAURANT_KEY, '1');
   window.localStorage.setItem(DEMO_MODE_KEY, '0');
   supabaseRestaurantIdPromise = null;
@@ -163,6 +166,34 @@ async function getDjangoRestaurantId() {
     throw new Error('Django restaurant id requires browser context');
   }
 
+  if (isDemoSessionMode()) {
+    const cachedDemo = window.localStorage.getItem(DJANGO_DEMO_RESTAURANT_ID_STORAGE_KEY);
+    if (cachedDemo) return cachedDemo;
+
+    const demoName = mockRestaurant.name;
+    const rows = await djangoRequest<Array<{ id: number; name: string }>>('/api/v1/restaurants/');
+    const existing = rows.find((row) => row.name === demoName);
+    if (existing) {
+      const id = String(existing.id);
+      window.localStorage.setItem(DJANGO_DEMO_RESTAURANT_ID_STORAGE_KEY, id);
+      return id;
+    }
+
+    const created = await djangoRequest<{ id: number }>('/api/v1/restaurants/', {
+      method: 'POST',
+      body: JSON.stringify({
+        name: demoName,
+        region: mockRestaurant.region,
+        city: mockRestaurant.city,
+        target_food_cost_percentage: mockRestaurant.targetFoodCostPercentage,
+      }),
+    });
+
+    const id = String(created.id);
+    window.localStorage.setItem(DJANGO_DEMO_RESTAURANT_ID_STORAGE_KEY, id);
+    return id;
+  }
+
   const cached = window.localStorage.getItem(DJANGO_RESTAURANT_ID_STORAGE_KEY);
   if (cached) return cached;
   const forceCreateNew = window.localStorage.getItem(DJANGO_FORCE_NEW_RESTAURANT_KEY) === '1';
@@ -194,6 +225,151 @@ async function getDjangoRestaurantId() {
   }
 
   return djangoRestaurantIdPromise;
+}
+
+function toRecentDate(base: Date, offsetDays: number) {
+  const next = new Date(base);
+  next.setDate(base.getDate() - offsetDays);
+  return next;
+}
+
+async function seedDjangoDemoData(restaurantId: string) {
+  if (!isDemoSessionMode()) return;
+  if (djangoDemoSeedPromise) return djangoDemoSeedPromise;
+
+  djangoDemoSeedPromise = (async () => {
+    try {
+      const [ingredients, dishes, recipes, sales] = await Promise.all([
+        djangoRequest<Array<any>>(`/api/v1/ingredients/?restaurant=${restaurantId}`),
+        djangoRequest<Array<any>>(`/api/v1/dishes/?restaurant=${restaurantId}`),
+        djangoRequest<Array<any>>(`/api/v1/recipes/?restaurant=${restaurantId}`),
+        djangoRequest<Array<any>>(`/api/v1/sales-records/?restaurant=${restaurantId}`),
+      ]);
+
+      const ingredientMap = new Map<string, number>();
+      const dishMap = new Map<string, number>();
+
+      if (ingredients.length === 0) {
+        for (const ingredient of mockIngredients) {
+          const created = await djangoRequest<any>('/api/v1/ingredients/', {
+            method: 'POST',
+            body: JSON.stringify({
+              restaurant: Number(restaurantId),
+              name: ingredient.name,
+              category: ingredient.category,
+              unit: ingredient.unit,
+              last_purchase_price: ingredient.lastPurchasePrice,
+              benchmark_price: ingredient.benchmarkPrice,
+              current_stock: ingredient.currentStock,
+            }),
+          });
+          ingredientMap.set(created.name, created.id);
+        }
+      } else {
+        ingredients.forEach((row) => ingredientMap.set(row.name, row.id));
+      }
+
+      if (dishes.length === 0) {
+        for (const dish of mockPosItems) {
+          const created = await djangoRequest<any>('/api/v1/dishes/', {
+            method: 'POST',
+            body: JSON.stringify({
+              restaurant: Number(restaurantId),
+              name: dish.name,
+              category: dish.category ?? 'Mains',
+              selling_price: dish.sellingPrice,
+              has_recipe: dish.hasRecipe,
+            }),
+          });
+          dishMap.set(created.name, created.id);
+        }
+      } else {
+        dishes.forEach((row) => dishMap.set(row.name, row.id));
+      }
+
+      if (recipes.length === 0) {
+        for (const recipe of mockRecipes) {
+          const dishId = dishMap.get(recipe.posItemName ?? recipe.posItemId);
+          if (!dishId) continue;
+          const items = recipe.ingredients
+            .map((item) => {
+              const ingredientId = ingredientMap.get(item.ingredientName);
+              if (!ingredientId) return null;
+              return {
+                ingredient: ingredientId,
+                quantity_per_portion: item.quantityPerPortion,
+                cost_per_unit: item.costPerUnit,
+                cost_per_portion: item.costPerPortion,
+              };
+            })
+            .filter(Boolean);
+
+          await djangoRequest('/api/v1/recipes/', {
+            method: 'POST',
+            body: JSON.stringify({
+              restaurant: Number(restaurantId),
+              dish: dishId,
+              total_plate_cost: recipe.totalPlateCost,
+              food_cost_percentage: recipe.foodCostPercentage,
+              items,
+            }),
+          });
+        }
+      }
+
+      if (sales.length === 0) {
+        const base = new Date();
+        for (let index = 0; index < mockSalesRecords.length; index += 1) {
+          const record = mockSalesRecords[index];
+          const dishId = dishMap.get(record.posItemName ?? record.posItemId);
+          if (!dishId) continue;
+          const date = toRecentDate(base, index % 7);
+          await djangoRequest('/api/v1/sales-records/', {
+            method: 'POST',
+            body: JSON.stringify({
+              restaurant: Number(restaurantId),
+              dish: dishId,
+              dish_name: record.posItemName,
+              date: date.toISOString(),
+              quantity: record.quantity,
+            }),
+          });
+        }
+      }
+
+      const purchases = await djangoRequest<Array<any>>(
+        `/api/v1/purchases/?restaurant=${restaurantId}`
+      );
+      if (purchases.length === 0) {
+        const base = new Date();
+        for (let index = 0; index < mockPurchases.length; index += 1) {
+          const purchase = mockPurchases[index];
+          const ingredientId = ingredientMap.get(purchase.ingredientName);
+          const date = toRecentDate(base, index % 14);
+          await djangoRequest('/api/v1/purchases/', {
+            method: 'POST',
+            body: JSON.stringify({
+              restaurant: Number(restaurantId),
+              date: date.toISOString(),
+              ingredient: ingredientId ?? null,
+              ingredient_name: purchase.ingredientName,
+              quantity: purchase.quantity,
+              unit: purchase.unit,
+              total_price: purchase.totalPrice,
+              unit_price: purchase.unitPrice,
+              supplier_id: purchase.supplierId,
+              supplier: purchase.supplier,
+              type: purchase.type,
+            }),
+          });
+        }
+      }
+    } catch (error) {
+      console.error('[seedDjangoDemoData] Failed to seed demo data', error);
+    }
+  })();
+
+  return djangoDemoSeedPromise;
 }
 
 async function getSupabaseRestaurantId() {
@@ -758,6 +934,7 @@ export function useIngredients(filters?: {
       const fetchIngredients = async () => {
         try {
           const restaurantId = await getDjangoRestaurantId();
+          await seedDjangoDemoData(restaurantId);
           const rows = await djangoRequest<Array<any>>(
             `/api/v1/ingredients/?restaurant=${restaurantId}`
           );
@@ -938,6 +1115,7 @@ export function usePurchases(dateRange?: { start: Date; end: Date }) {
       const fetchPurchases = async () => {
         try {
           const restaurantId = await getDjangoRestaurantId();
+          await seedDjangoDemoData(restaurantId);
           const rows = await djangoRequest<Array<any>>(
             `/api/v1/purchases/?restaurant=${restaurantId}`
           );
@@ -1044,6 +1222,7 @@ export function useRecipes() {
       const fetchRecipes = async () => {
         try {
           const restaurantId = await getDjangoRestaurantId();
+          await seedDjangoDemoData(restaurantId);
           const rows = await djangoRequest<Array<any>>(
             `/api/v1/recipes/?restaurant=${restaurantId}`
           );
@@ -1222,6 +1401,7 @@ export function usePosItems(filters?: { hasRecipe?: boolean }) {
       const fetchPosItems = async () => {
         try {
           const restaurantId = await getDjangoRestaurantId();
+          await seedDjangoDemoData(restaurantId);
           const rows = await djangoRequest<Array<any>>(
             `/api/v1/dishes/?restaurant=${restaurantId}`
           );
@@ -1318,6 +1498,7 @@ export function useSalesRecords(dateRange?: { start: Date; end: Date }) {
       const fetchSalesRecords = async () => {
         try {
           const restaurantId = await getDjangoRestaurantId();
+          await seedDjangoDemoData(restaurantId);
           const rows = await djangoRequest<Array<any>>(
             `/api/v1/sales-records/?restaurant=${restaurantId}`
           );
