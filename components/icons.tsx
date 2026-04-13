@@ -77,6 +77,15 @@ export function CheckCircle2Icon({ className = "w-5 h-5" }: { className?: string
   )
 }
 
+export function ShieldCheckIcon({ className = "w-5 h-5" }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M12 2l7 3v6c0 5-3.5 9.7-7 11-3.5-1.3-7-6-7-11V5l7-3z" />
+      <polyline points="9 12 11 14 15 10" />
+    </svg>
+  )
+}
+
 export function CameraIcon({ className = "w-5 h-5" }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">

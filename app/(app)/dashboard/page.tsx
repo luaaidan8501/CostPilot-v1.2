@@ -1,21 +1,20 @@
 "use client"
 
-import { useState } from "react"
 import { useDashboardSummary, useDishesOverTarget } from "@/lib/hooks"
-import { DashboardKPI } from "@/components/dashboard/kpi-cards"
 import { FoodCostChart } from "@/components/dashboard/food-cost-chart"
 import { MainCostDriver } from "@/components/dashboard/main-cost-driver"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { ShieldCheckIcon } from "@/components/icons"
 
 export default function DashboardPage() {
-  const [dateRange, setDateRange] = useState("30days")
   const { data: kpi, isLoading } = useDashboardSummary()
   const { data: dishesOverTarget } = useDishesOverTarget()
   const topWorstPerformers = dishesOverTarget.slice(0, 10)
+  const mainDish = topWorstPerformers[0]
+  const mainIngredient = kpi?.topCostDrivers?.[0]?.ingredient ?? "Chicken Thigh"
+  const ingredientUsage = mainIngredient.toLowerCase().includes("chicken") ? "0.20 kg" : "0.15 kg"
 
   if (isLoading) {
     return (
@@ -33,128 +32,70 @@ export default function DashboardPage() {
         <p className="text-slate-600 mt-1">Track your food costs in real-time</p>
       </div>
 
-      <MainCostDriver />
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <MainCostDriver
+          dishName={mainDish?.dish ?? "Chicken Adobo Plate"}
+          ingredientName={mainIngredient}
+          ingredientUsage={ingredientUsage}
+          unitPrice="₱180/kg"
+          costPerDish="₱36"
+          foodCostPercent={`${mainDish?.foodCostPercentage ?? 36}%`}
+          targetPercent={`${mainDish?.target ?? 30}%`}
+          salesCount={`${mainDish?.salesVolume ?? 45}`}
+          impact={`₱${mainDish?.revenueImpact ?? 360}`}
+        />
+        <FoodCostChart />
+      </div>
 
-      <DashboardKPI kpi={kpi} />
-      <FoodCostChart />
+      <Card className="border border-emerald-200 bg-emerald-50">
+        <CardContent className="py-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-emerald-100 rounded-full">
+              <ShieldCheckIcon className="w-5 h-5 text-emerald-700" />
+            </div>
+            <div>
+              <p className="font-semibold text-emerald-900">Your recipes are private and secure</p>
+              <p className="text-sm text-emerald-800">
+                We use recipes only to calculate costs. They are never shared outside your restaurant.
+              </p>
+            </div>
+          </div>
+          <div className="text-sm text-emerald-900 font-medium">Confidence: high</div>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
-          <CardTitle>Analytics</CardTitle>
-          <CardDescription>Performance insights and trends</CardDescription>
+          <CardTitle>Dish Watchlist (Last 2 Weeks)</CardTitle>
+          <CardDescription>Prioritize dishes that are above target</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-6">
-          <div className="flex flex-col sm:flex-row gap-4">
-            <Select value={dateRange} onValueChange={setDateRange}>
-              <SelectTrigger className="w-full sm:w-40">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="7days">Last 7 days</SelectItem>
-                <SelectItem value="30days">Last 30 days</SelectItem>
-                <SelectItem value="90days">Last 90 days</SelectItem>
-              </SelectContent>
-            </Select>
+        <CardContent>
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Dish</TableHead>
+                  <TableHead className="text-right">Food Cost %</TableHead>
+                  <TableHead className="text-right">Target</TableHead>
+                  <TableHead className="text-right">Variance</TableHead>
+                  <TableHead className="text-right">Sales Volume</TableHead>
+                  <TableHead className="text-right">Revenue Impact</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {topWorstPerformers.map((dish) => (
+                  <TableRow key={dish.dish}>
+                    <TableCell className="font-medium">{dish.dish}</TableCell>
+                    <TableCell className="text-right text-red-600">{dish.foodCostPercentage}%</TableCell>
+                    <TableCell className="text-right">{dish.target}%</TableCell>
+                    <TableCell className="text-right text-red-600 font-medium">+{dish.variance}%</TableCell>
+                    <TableCell className="text-right">{dish.salesVolume}</TableCell>
+                    <TableCell className="text-right">₱ {dish.revenueImpact}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
           </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Average Food Cost %</CardTitle>
-                <CardDescription>For selected period</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="text-4xl font-bold text-teal-600">30.2%</div>
-                <p className="text-sm text-slate-600 mt-2">Target: 28–32%</p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Dishes Over Target</CardTitle>
-                <CardDescription>In current period</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="text-4xl font-bold text-red-600">{dishesOverTarget.length}</div>
-                <p className="text-sm text-slate-600 mt-2">Require attention</p>
-              </CardContent>
-            </Card>
-          </div>
-
-          <Tabs defaultValue="dishes" className="space-y-4">
-            <TabsList>
-              <TabsTrigger value="dishes">Dishes Over Target</TabsTrigger>
-              <TabsTrigger value="volatility">Volatile Ingredients</TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="dishes" className="space-y-4">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Dishes Over Target (Last 30 Days)</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="overflow-x-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Dish</TableHead>
-                          <TableHead className="text-right">Avg Food Cost %</TableHead>
-                          <TableHead className="text-right">Target</TableHead>
-                          <TableHead className="text-right">Variance</TableHead>
-                          <TableHead className="text-right">Sales Volume</TableHead>
-                          <TableHead className="text-right">Revenue Impact</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {topWorstPerformers.map((dish) => (
-                          <TableRow key={dish.dish}>
-                            <TableCell className="font-medium">{dish.dish}</TableCell>
-                            <TableCell className="text-right text-red-600">{dish.foodCostPercentage}%</TableCell>
-                            <TableCell className="text-right">{dish.target}%</TableCell>
-                            <TableCell className="text-right text-red-600 font-medium">+{dish.variance}%</TableCell>
-                            <TableCell className="text-right">{dish.salesVolume}</TableCell>
-                            <TableCell className="text-right">₱ {dish.revenueImpact}</TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                </CardContent>
-              </Card>
-            </TabsContent>
-
-            <TabsContent value="volatility" className="space-y-4">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Most Volatile Ingredients</CardTitle>
-                  <CardDescription>Ingredients with significant price fluctuations</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-3">
-                    {[
-                      { name: "Chicken Thigh", change: "+18%", usage: "High", impact: "Critical" },
-                      { name: "Cooking Oil", change: "+12%", usage: "Medium", impact: "High" },
-                      { name: "Pork Belly", change: "+8%", usage: "Medium", impact: "Medium" },
-                    ].map((item) => (
-                      <div
-                        key={item.name}
-                        className="flex flex-col md:flex-row md:items-center justify-between p-3 bg-slate-50 rounded-lg gap-2 md:gap-0"
-                      >
-                        <div>
-                          <p className="font-medium">{item.name}</p>
-                          <div className="flex gap-3 mt-1 text-xs text-slate-600">
-                            <span>Usage: {item.usage}</span>
-                            <span>Impact: {item.impact}</span>
-                          </div>
-                        </div>
-                        <div className="text-red-600 font-medium text-lg">{item.change}</div>
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            </TabsContent>
-          </Tabs>
         </CardContent>
       </Card>
     </div>
