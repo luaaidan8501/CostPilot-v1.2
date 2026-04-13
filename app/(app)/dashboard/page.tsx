@@ -7,8 +7,10 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { ShieldCheckIcon } from "@/components/icons"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 export default function DashboardPage() {
+  const [selectedDish, setSelectedDish] = useState<string>("all")
   const { data: kpi, isLoading } = useDashboardSummary()
   const { data: dishesOverTarget } = useDishesOverTarget()
   const topWorstPerformers = dishesOverTarget.slice(0, 10)
@@ -44,7 +46,25 @@ export default function DashboardPage() {
           salesCount={`${mainDish?.salesVolume ?? 45}`}
           impact={`₱${mainDish?.revenueImpact ?? 360}`}
         />
-        <FoodCostChart />
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-medium text-slate-600">Select dish for 2-week trend</p>
+            <Select value={selectedDish} onValueChange={setSelectedDish}>
+              <SelectTrigger className="w-[220px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All dishes</SelectItem>
+                {topWorstPerformers.map((dish) => (
+                  <SelectItem key={dish.dish} value={dish.dish}>
+                    {dish.dish}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <FoodCostChart dishName={selectedDish === "all" ? null : selectedDish} />
+        </div>
       </div>
 
       <Card className="border border-emerald-200 bg-emerald-50">

@@ -5,11 +5,18 @@ import { useAnalyticsData, useDashboardSummary } from '@/lib/hooks';
 import { ChartContainer } from '@/components/ui/chart';
 import { Area, AreaChart, CartesianGrid, ReferenceLine, XAxis, YAxis } from 'recharts';
 
-export function FoodCostChart() {
+interface FoodCostChartProps {
+  dishName?: string | null;
+}
+
+export function FoodCostChart({ dishName }: FoodCostChartProps) {
   const { data: chartData } = useAnalyticsData();
   const { data: kpi } = useDashboardSummary();
 
-  const sliced = chartData.slice(-14);
+  const filtered = dishName
+    ? chartData.filter((point) => point.dishName === dishName)
+    : chartData;
+  const sliced = filtered.slice(-14);
   const series = sliced.length
     ? sliced.map((d, index) => ({
         label: `Day ${index + 1}`,
@@ -29,7 +36,9 @@ export function FoodCostChart() {
     <Card>
       <CardHeader>
         <CardTitle>2-Week Food Cost + Projection</CardTitle>
-        <CardDescription>Focus on the last 14 days with a clear projected trend</CardDescription>
+        <CardDescription>
+          {dishName ? `Focused on ${dishName}` : 'Focus on the last 14 days with a clear projected trend'}
+        </CardDescription>
       </CardHeader>
       <CardContent>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
