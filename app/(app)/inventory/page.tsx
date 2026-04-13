@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { useIngredients, usePosItems, useRecipes, useSalesRecords, useSetSalesRecords } from '@/lib/hooks';
 import type { SalesRecord } from '@/lib/types';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { mockIngredients, mockPosItems, mockRecipes, mockSalesRecords } from '@/lib/mock-data';
 import {
   CanonicalField,
   CsvType,
@@ -101,6 +102,11 @@ export default function InventoryPage() {
   const { data: salesRecords } = useSalesRecords(dateRange);
   const setSalesRecords = useSetSalesRecords();
 
+  const activeIngredients = ingredients.length ? ingredients : mockIngredients;
+  const activePosItems = posItems.length ? posItems : mockPosItems;
+  const activeRecipes = recipes.length ? recipes : mockRecipes;
+  const activeSalesRecords = salesRecords.length ? salesRecords : mockSalesRecords;
+
   const { usageRows, totalServings, estimatedCost, dishRows } = useMemo(() => {
     const usageMap = new Map<
       string,
@@ -110,13 +116,13 @@ export default function InventoryPage() {
     let servings = 0;
     let cost = 0;
 
-    salesRecords.forEach((record) => {
-      const recipe = recipes.find((r) => r.posItemId === record.posItemId);
+    activeSalesRecords.forEach((record) => {
+      const recipe = activeRecipes.find((r) => r.posItemId === record.posItemId);
       if (!recipe) return;
 
       servings += record.quantity;
       const dishName =
-        posItems.find((item) => item.id === record.posItemId)?.name ||
+        activePosItems.find((item) => item.id === record.posItemId)?.name ||
         record.posItemName;
       const dishEntry = dishMap.get(record.posItemId);
       if (dishEntry) {
@@ -146,7 +152,7 @@ export default function InventoryPage() {
     });
 
     const rows = Array.from(usageMap.entries()).map(([id, data]) => {
-      const ingredient = ingredients.find((ing) => ing.id === id);
+      const ingredient = activeIngredients.find((ing) => ing.id === id);
       return {
         id,
         ingredientName: data.ingredientName,
@@ -166,7 +172,7 @@ export default function InventoryPage() {
       .sort((a, b) => b.servings - a.servings);
 
     return { usageRows: rows, totalServings: servings, estimatedCost: cost, dishRows };
-  }, [ingredients, recipes, salesRecords, posItems]);
+  }, [activeIngredients, activeRecipes, activeSalesRecords, activePosItems]);
 
   const handleDownloadTemplate = () => {
     const header =

@@ -39,6 +39,7 @@ import {
 } from "@/components/ui/dialog";
 import { ChevronDownIcon, PlusIcon, TrashIcon } from "@/components/icons";
 import type { Recipe, RecipeIngredient, Ingredient, PosItem } from "@/lib/types";
+import { mockIngredients, mockPosItems, mockRecipes } from "@/lib/mock-data";
 
 function hashString(value: string) {
   let hash = 0;
@@ -81,14 +82,17 @@ export default function RecipesPosPage() {
   const { data: posItems } = usePosItems();
   const { data: recipes } = useRecipes();
   const { data: ingredients } = useIngredients();
+  const activePosItems = posItems.length ? posItems : mockPosItems;
+  const activeRecipes = recipes.length ? recipes : mockRecipes;
+  const activeIngredients = ingredients.length ? ingredients : mockIngredients;
   const saveRecipe = useSaveRecipe();
   const savePosItem = useSavePosItem();
   const updateRecipe = useUpdateRecipe();
   const updatePosItem = useUpdatePosItem();
   const saveIngredient = useSaveIngredient();
   const selectedRecipe = useMemo(
-    () => recipes.find((item) => item.posItemId === selectedPosItemId),
-    [recipes, selectedPosItemId]
+    () => activeRecipes.find((item) => item.posItemId === selectedPosItemId),
+    [activeRecipes, selectedPosItemId]
   );
 
   // New ingredient form state
@@ -132,11 +136,11 @@ export default function RecipesPosPage() {
     },
   });
 
-  const posItemsRef = useRef(posItems);
+  const posItemsRef = useRef(activePosItems);
 
   useEffect(() => {
-    posItemsRef.current = posItems;
-  }, [posItems]);
+    posItemsRef.current = activePosItems;
+  }, [activePosItems]);
 
   useEffect(() => {
     if (!selectedPosItemId) {
@@ -172,21 +176,21 @@ export default function RecipesPosPage() {
   }, [selectedRecipe, selectedPosItemId]);
 
   const categories = useMemo(() => {
-    const unique = new Set(posItems.map((item) => item.category).filter(Boolean));
+    const unique = new Set(activePosItems.map((item) => item.category).filter(Boolean));
     const ordered = ["Mains", "Appetizers", "Sides", "Drinks", "Desserts"];
     return [
       "All",
       ...ordered.filter((cat) => unique.has(cat)),
       ...Array.from(unique).filter((cat) => !ordered.includes(cat)),
     ];
-  }, [posItems]);
+  }, [activePosItems]);
 
   const recipeMap = useMemo(() => {
-    return new Map(recipes.map((item) => [item.posItemId, item]));
-  }, [recipes]);
+    return new Map(activeRecipes.map((item) => [item.posItemId, item]));
+  }, [activeRecipes]);
 
   const rows = useMemo(() => {
-    const mapped = posItems.map((item) => {
+    const mapped = activePosItems.map((item) => {
       const recipeItem = recipeMap.get(item.id);
       return {
         id: item.id,
@@ -215,7 +219,7 @@ export default function RecipesPosPage() {
       }
       return bCost - aCost;
     });
-  }, [posItems, recipeMap, categoryFilter, sortOption]);
+  }, [activePosItems, recipeMap, categoryFilter, sortOption]);
 
   const months = useMemo(() => getRecentMonths(), []);
 
@@ -224,7 +228,7 @@ export default function RecipesPosPage() {
       formData.newIngredient;
     if (!ingredientId || !quantityPerPortion) return;
 
-    const selectedIngredient = ingredients.find(
+    const selectedIngredient = activeIngredients.find(
       (ing) => ing.id === ingredientId
     );
     if (!selectedIngredient) return;

@@ -8,6 +8,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { AlertCircleIcon, AlertTriangleIcon, InfoIcon } from "@/components/icons"
 import { suggestIngredientAlternatives } from "@/lib/ai"
+import { mockAlerts, mockIngredients } from "@/lib/mock-data"
 
 export default function AlertsPage() {
   const [filterStatus, setFilterStatus] = useState("open")
@@ -18,6 +19,12 @@ export default function AlertsPage() {
     severity: filterSeverity || undefined,
   })
   const { data: ingredients } = useIngredients()
+  const activeIngredients = ingredients.length ? ingredients : mockIngredients
+  const activeAlerts = (alerts.length ? alerts : mockAlerts).filter((alert) => {
+    if (filterStatus && alert.status !== filterStatus) return false
+    if (filterSeverity && alert.severity !== filterSeverity) return false
+    return true
+  })
 
   const getSeverityIcon = (severity: string) => {
     switch (severity) {
@@ -95,8 +102,8 @@ export default function AlertsPage() {
 
       {/* Alerts List */}
       <div className="space-y-4">
-        {alerts.length > 0 ? (
-          alerts.map((alert) => (
+        {activeAlerts.length > 0 ? (
+          activeAlerts.map((alert) => (
             <div key={alert.id} className={`p-4 rounded-lg ${getSeverityBg(alert.severity)}`}>
               <div className="flex flex-col md:flex-row items-start gap-4">
                 <div className="pt-1 flex-shrink-0">{getSeverityIcon(alert.severity)}</div>
@@ -114,8 +121,8 @@ export default function AlertsPage() {
                         Smart Suggestions
                       </p>
                       {(() => {
-                        const ingredient = ingredients.find((item) => item.id === alert.relatedId)
-                        const suggestions = suggestIngredientAlternatives(ingredient, ingredients)
+                        const ingredient = activeIngredients.find((item) => item.id === alert.relatedId)
+                        const suggestions = suggestIngredientAlternatives(ingredient, activeIngredients)
                         if (suggestions.length === 0) {
                           return (
                             <p className="text-sm text-slate-600 mt-1">
